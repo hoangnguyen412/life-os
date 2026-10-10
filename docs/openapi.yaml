@@ -1,952 +1,1070 @@
-# Life OS — Backend API Contract
-
-## 1. API Conventions
-
-### Base URL
-
-```text
-/api
-```
-
-Example:
-
-```text
-POST /api/auth/login
-GET  /api/tasks
-```
-
-### Content Type
-
-All request/response bodies use:
-
-```http
-Content-Type: application/json
-```
-
-### Authentication
-
-All endpoints require JWT except:
-
-```text
-POST /api/auth/register
-POST /api/auth/login
-```
-
-Protected requests:
-
-```http
-Authorization: Bearer <JWT>
-```
-
-After JWT verification:
-
-```text
-req.userId
-```
-
-is attached by `authMiddleware`.
-
-Every protected database query must be scoped by `userId`.
-
----
-
-# 2. Standard Response Format
-
-## Success — Single Resource / Mutation
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
-## Success — Collection
-
-```json
-{
-  "success": true,
-  "data": []
-}
-```
-
-## Success — Paginated Collection
-
-```json
-{
-  "success": true,
-  "data": [],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 45,
-    "totalPages": 3
-  }
-}
-```
-
-## Error
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Title is required",
-    "field": "title"
-  }
-}
-```
-
-### Standard Error Codes
-
-| Code | HTTP |
-|---|---:|
-| `VALIDATION_ERROR` | 400 |
-| `UNAUTHORIZED` | 401 |
-| `NOT_FOUND` | 404 |
-| `CONFLICT` | 409 |
-| `SERVER_ERROR` | 500 |
-
----
-
-# 3. Authentication API
-
-## 3.1 Register
-
-```http
-POST /api/auth/register
-```
-
-### Request
-
-```json
-{
-  "email": "user@example.com",
-  "password": "password123",
-  "name": "Nguyen"
-}
-```
-
-### Rules
-
-- `email` is required and unique.
-- `password` is required.
-- Password is hashed with bcrypt.
-- Plain-text password is never stored.
-- Duplicate email → `409 CONFLICT`.
-
-### Response — 201
-
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": "USER_ID",
-      "email": "user@example.com",
-      "name": "Nguyen"
-    }
-  }
-}
-```
-
----
-
-## 3.2 Login
-
-```http
-POST /api/auth/login
-```
-
-### Request
-
-```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "token": "JWT_TOKEN",
-    "user": {
-      "id": "USER_ID",
-      "email": "user@example.com",
-      "name": "Nguyen"
-    }
-  }
-}
-```
-
-Invalid credentials:
-
-```text
-401 UNAUTHORIZED
-```
-
----
-
-## 3.3 Get Current User
-
-```http
-GET /api/auth/me
-```
-
-### Auth
-
-Required.
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "USER_ID",
-    "email": "user@example.com",
-    "name": "Nguyen"
-  }
-}
-```
-
----
-
-# 4. Task API
-
-## 4.1 List Tasks
-
-```http
-GET /api/tasks
-```
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `status` | string | No | `todo`, `in_progress`, `done` |
-| `goalId` | ObjectId | No | Filter by Goal |
-| `overdue` | boolean | No | `true` = overdue only |
-| `sort` | string | No | Sorting rule |
-| `page` | number | No | Default `1` |
-| `limit` | number | No | Default `20` |
-
-### Overdue Definition
-
-```text
-dueDate < now
-AND
-status != done
-```
-
-### Example
-
-```http
-GET /api/tasks?status=todo&overdue=true&page=1&limit=20
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "TASK_ID",
-      "userId": "USER_ID",
-      "title": "Complete API",
-      "description": "Finish Task API",
-      "status": "todo",
-      "dueDate": "2026-10-12T16:59:59.000Z",
-      "goalId": "GOAL_ID",
-      "priority": "high",
-      "completedAt": null,
-      "createdAt": "2026-10-08T08:00:00.000Z",
-      "updatedAt": "2026-10-08T08:00:00.000Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 1,
-    "totalPages": 1
-  }
-}
-```
-
----
-
-## 4.2 Create Task
-
-```http
-POST /api/tasks
-```
-
-### Request
-
-```json
-{
-  "title": "Complete API",
-  "description": "Finish Task API",
-  "status": "todo",
-  "dueDate": "2026-10-12T16:59:59.000Z",
-  "goalId": "GOAL_ID",
-  "priority": "high"
-}
-```
-
-### Rules
-
-- `userId` is taken from JWT, never from request body.
-- `status` must be `todo | in_progress | done`.
-- `priority` must be `low | medium | high`.
-- `goalId` is optional.
-- If `goalId` exists, the Goal must belong to the current user.
-- If initial status is `done`, `completedAt` is set.
-- Otherwise `completedAt = null`.
-
-### Response — 201
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "TASK_ID",
-    "userId": "USER_ID",
-    "title": "Complete API",
-    "description": "Finish Task API",
-    "status": "todo",
-    "dueDate": "2026-10-12T16:59:59.000Z",
-    "goalId": "GOAL_ID",
-    "priority": "high",
-    "completedAt": null,
-    "createdAt": "2026-10-08T08:00:00.000Z",
-    "updatedAt": "2026-10-08T08:00:00.000Z"
-  }
-}
-```
-
----
-
-## 4.3 Get Task
-
-```http
-GET /api/tasks/:id
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "TASK_ID",
-    "userId": "USER_ID",
-    "title": "Complete API",
-    "description": "Finish Task API",
-    "status": "todo",
-    "dueDate": "2026-10-12T16:59:59.000Z",
-    "goalId": "GOAL_ID",
-    "priority": "high",
-    "completedAt": null,
-    "createdAt": "2026-10-08T08:00:00.000Z",
-    "updatedAt": "2026-10-08T08:00:00.000Z"
-  }
-}
-```
-
-Resource belonging to another user:
-
-```text
-404 NOT_FOUND
-```
-
----
-
-## 4.4 Update Task
-
-```http
-PUT /api/tasks/:id
-```
-
-### Request
-
-Editable fields:
-
-```json
-{
-  "title": "Complete Backend API",
-  "description": "Finish and test API",
-  "status": "in_progress",
-  "dueDate": "2026-10-13T16:59:59.000Z",
-  "goalId": "GOAL_ID",
-  "priority": "high"
-}
-```
-
-### Rules
-
-- `userId` cannot be changed.
-- `goalId` must belong to the current user.
-- `status → done` sets `completedAt`.
-- `done → another status` clears `completedAt`.
-- Changing `goalId` recalculates both old and new Goals.
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 4.5 Delete Task
-
-```http
-DELETE /api/tasks/:id
-```
-
-### Rules
-
-If the Task has `goalId`:
-
-```text
-Delete Task
-    ↓
-Recalculate Goal progress
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "TASK_ID"
-  }
-}
-```
-
----
-
-# 5. Goal API
-
-## 5.1 List Goals
-
-```http
-GET /api/goals
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": []
-}
-```
-
----
-
-## 5.2 Create Goal
-
-```http
-POST /api/goals
-```
-
-### Request — Task Based
-
-```json
-{
-  "title": "Finish Life OS",
-  "deadline": "2026-10-20T16:59:59.000Z",
-  "progressMode": "task_based"
-}
-```
-
-### Request — Manual
-
-```json
-{
-  "title": "Learn Backend",
-  "deadline": "2026-11-01T16:59:59.000Z",
-  "progressMode": "manual",
-  "manualProgress": 60
-}
-```
-
-### Rules
-
-`progressMode`:
-
-```text
-task_based | manual
-```
-
-For `task_based`:
-
-```text
-progress = completed tasks / total tasks × 100
-```
-
-For no Tasks:
-
-```text
-progress = 0
-status = active
-```
-
-For `manual`:
-
-```text
-progress = manualProgress
-```
-
-### Response — 201
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 5.3 Get Goal
-
-```http
-GET /api/goals/:id
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 5.4 Update Goal
-
-```http
-PUT /api/goals/:id
-```
-
-### Request
-
-```json
-{
-  "title": "Finish Life OS MVP",
-  "deadline": "2026-10-25T16:59:59.000Z",
-  "progressMode": "task_based"
-}
-```
-
-### Rules
-
-When changing:
-
-```text
-manual → task_based
-```
-
-Recalculate progress immediately.
-
-When changing:
-
-```text
-task_based → manual
-```
-
-Set:
-
-```text
-manualProgress = current progress
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 5.5 Update Manual Progress
-
-```http
-PATCH /api/goals/:id/progress
-```
-
-### Request
-
-```json
-{
-  "progress": 60
-}
-```
-
-### Rules
-
-Only allowed when:
-
-```text
-progressMode = manual
-```
-
-For `task_based`:
-
-```text
-400 VALIDATION_ERROR
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 5.6 Delete Goal
-
-```http
-DELETE /api/goals/:id
-```
-
-### Rules
-
-Deleting a Goal must NOT delete its Tasks.
-
-Instead:
-
-```text
-Task.goalId → null
-```
-
-Only Tasks belonging to the current user are updated.
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "GOAL_ID"
-  }
-}
-```
-
----
-
-# 6. Calendar Event API
-
-## 6.1 List Events
-
-```http
-GET /api/events
-```
-
-### Query Parameters
-
-| Parameter | Type | Required |
-|---|---|---|
-| `from` | ISO Date | No |
-| `to` | ISO Date | No |
-
-Example:
-
-```http
-GET /api/events?from=2026-10-08T00:00:00.000Z&to=2026-10-14T23:59:59.999Z
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": []
-}
-```
-
----
-
-## 6.2 Create Event
-
-```http
-POST /api/events
-```
-
-### Request
-
-```json
-{
-  "title": "Team Meeting",
-  "startTime": "2026-10-09T08:00:00.000Z",
-  "endTime": "2026-10-09T09:00:00.000Z",
-  "description": "Weekly project meeting"
-}
-```
-
-### Validation
-
-```text
-endTime > startTime
-```
-
-Invalid:
-
-```text
-400 VALIDATION_ERROR
-field = endTime
-```
-
-### Response — 201
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 6.3 Get Event
-
-```http
-GET /api/events/:id
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 6.4 Update Event
-
-```http
-PUT /api/events/:id
-```
-
-### Request
-
-```json
-{
-  "title": "Updated Meeting",
-  "startTime": "2026-10-09T09:00:00.000Z",
-  "endTime": "2026-10-09T10:00:00.000Z",
-  "description": "Updated description"
-}
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
----
-
-## 6.5 Delete Event
-
-```http
-DELETE /api/events/:id
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "EVENT_ID"
-  }
-}
-```
-
----
-
-# 7. Dashboard API
-
-## 7.1 Summary
-
-```http
-GET /api/dashboard/summary
-```
-
-### Response — 200
-
-```json
-{
-  "success": true,
-  "data": {
-    "totalTasks": 10,
-    "completedTasks": 4,
-    "overdueTasks": 2,
-    "avgGoalProgress": 65
-  }
-}
-```
-
-### Definitions
-
-`totalTasks`
-
-```text
-All Tasks belonging to current user
-```
-
-`completedTasks`
-
-```text
-Tasks where status = done
-```
-
-`overdueTasks`
-
-```text
-dueDate < now
-AND
-status != done
-```
-
-`avgGoalProgress`
-
-```text
-Average progress of active Goals
-```
-
-If there are no active Goals:
-
-```text
-avgGoalProgress = 0
-```
-
----
-
-# 8. Authorization Rules
-
-Every protected endpoint follows:
-
-```text
-JWT
- ↓
-req.userId
- ↓
-Service query
- ↓
-filter by userId
-```
-
-Examples:
-
-```text
-GET /api/tasks/:id
-```
-
-must internally behave like:
-
-```text
-findOne({
-  _id: taskId,
-  userId: req.userId
-})
-```
-
-The same ownership rule applies to:
-
-```text
-Tasks
-Goals
-CalendarEvents
-```
-
-A resource belonging to another user is treated as:
-
-```text
-404 NOT_FOUND
-```
-
----
-
-# 9. API Status Codes
-
-| Operation | Success |
-|---|---:|
-| Register | 201 |
-| Login | 200 |
-| Get resource | 200 |
-| Create resource | 201 |
-| Update resource | 200 |
-| Delete resource | 200 |
-| Invalid input | 400 |
-| Invalid/missing JWT | 401 |
-| Resource not found / unauthorized ownership | 404 |
-| Duplicate resource | 409 |
-| Unexpected server error | 500 |
-
----
-
-# 10. Core API Summary
-
-```text
-AUTH
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/auth/me
-
-TASK
-GET    /api/tasks
-POST   /api/tasks
-GET    /api/tasks/:id
-PUT    /api/tasks/:id
-DELETE /api/tasks/:id
-
-GOAL
-GET    /api/goals
-POST   /api/goals
-GET    /api/goals/:id
-PUT    /api/goals/:id
-PATCH  /api/goals/:id/progress
-DELETE /api/goals/:id
-
-EVENT
-GET    /api/events
-POST   /api/events
-GET    /api/events/:id
-PUT    /api/events/:id
-DELETE /api/events/:id
-
-DASHBOARD
-GET    /api/dashboard/summary
-```
-
-This is the **Core API Contract**. Extension APIs are added separately during the Expansion phase and must not break the Core contract.
+openapi: 3.0.3
+info:
+  title: Life OS API
+  version: 1.0.0
+  description: >-
+    Core REST API contract for Life OS. This file is the machine-readable source of truth
+    shared by frontend and backend. All dates are ISO-8601 UTC strings ending in Z.
+servers:
+  - url: /api
+    description: Current API server
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Tasks
+  - name: Goals
+  - name: Calendar Events
+  - name: Dashboard
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterInput'
+            example:
+              name: Nguyen
+              email: user@example.com
+              password: password123
+      responses:
+        '201':
+          description: User registered; returns a JWT and public user data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in and receive a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+            example:
+              email: user@example.com
+              password: password123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get the authenticated user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List, filter, sort, and paginate tasks
+      parameters:
+        - name: status
+          in: query
+          description: Filter by task status.
+          schema:
+            type: string
+            enum: [todo, in_progress, done]
+        - name: goalId
+          in: query
+          description: Goal ObjectId; use `none` to select tasks without a Goal.
+          schema:
+            type: string
+        - name: overdue
+          in: query
+          description: Filter according to dueDate < now and status != done. Tasks without dueDate are not overdue.
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          description: dueDate_asc sorts null due dates last; priority_desc sorts high to low; createdAt_desc sorts newest first.
+          schema:
+            type: string
+            enum: [dueDate_asc, priority_desc, createdAt_desc]
+            default: dueDate_asc
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated tasks. goalId is an ID string or null, never a populated Goal object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateInput'
+            example:
+              title: Finish API contract
+              description: null
+              status: todo
+              dueDate: '2026-10-10T16:59:59.999Z'
+              goalId: null
+              priority: high
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /tasks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Tasks]
+      summary: Get one task
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [Tasks]
+      summary: Replace all editable task fields
+      description: Send all editable fields. Use null to clear description, dueDate, or goalId. completedAt and timestamps are backend-managed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskReplaceInput'
+            example:
+              title: Finish API contract
+              description: Review with backend teammate
+              status: in_progress
+              dueDate: '2026-10-10T16:59:59.999Z'
+              goalId: '652f1d8c4a2b9e8c7d6f1234'
+              priority: high
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Tasks]
+      summary: Delete a task
+      responses:
+        '200':
+          description: Task deleted; linked Goal progress is recalculated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /goals:
+    get:
+      tags: [Goals]
+      summary: List and paginate goals
+      description: Goals are sorted newest first by createdAt (descending).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated goals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Goals]
+      summary: Create a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalCreateInput'
+            examples:
+              taskBased:
+                value:
+                  title: Complete Life OS
+                  deadline: '2026-10-30T16:59:59.999Z'
+                  progressMode: task_based
+              manual:
+                value:
+                  title: Improve productivity
+                  deadline: null
+                  progressMode: manual
+                  manualProgress: 60
+      responses:
+        '201':
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /goals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Goals]
+      summary: Get one goal
+      responses:
+        '200':
+          description: Goal details including progressMode, manualProgress, progress, and status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [Goals]
+      summary: Replace editable goal fields
+      description: Send title, deadline, and progressMode. Progress is backend-managed; use the progress PATCH endpoint for manual progress.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalReplaceInput'
+            example:
+              title: Complete Life OS
+              deadline: '2026-10-30T16:59:59.999Z'
+              progressMode: task_based
+      responses:
+        '200':
+          description: Updated Goal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Goals]
+      summary: Delete a goal and unlink its tasks
+      responses:
+        '200':
+          description: Goal deleted; its Tasks are retained with goalId null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /goals/{id}/progress:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    patch:
+      tags: [Goals]
+      summary: Set manual progress for a manual-mode goal
+      description: Only valid when progressMode is manual. For task_based goals, return VALIDATION_ERROR with field progressMode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalProgressInput'
+            example:
+              manualProgress: 60
+      responses:
+        '200':
+          description: Updated Goal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /events:
+    get:
+      tags: [Calendar Events]
+      summary: List/paginate calendar events, optionally filtered by visible time range
+      parameters:
+        - name: from
+          in: query
+          description: ISO UTC start of visible range. Must be provided together with `to`.
+          schema:
+            type: string
+            format: date-time
+            pattern: 'Z$'
+        - name: to
+          in: query
+          description: ISO UTC end of visible range; must be later than `from` and provided together with it.
+          schema:
+            type: string
+            format: date-time
+            pattern: 'Z$'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Events sorted by startTime ascending; range includes overlapping events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Calendar Events]
+      summary: Create a calendar event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreateInput'
+            example:
+              title: Study database
+              startTime: '2026-10-10T02:00:00.000Z'
+              endTime: '2026-10-10T03:30:00.000Z'
+              description: null
+      responses:
+        '201':
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Calendar Events]
+      summary: Get one calendar event
+      responses:
+        '200':
+          description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [Calendar Events]
+      summary: Replace all editable event fields
+      description: Send title, startTime, endTime, and description. Use null to clear description.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventReplaceInput'
+      responses:
+        '200':
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Calendar Events]
+      summary: Delete a calendar event
+      responses:
+        '200':
+          description: Event deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard summary statistics
+      responses:
+        '200':
+          description: Dashboard metrics for the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+              example:
+                success: true
+                data:
+                  totalTasks: 10
+                  completedTasks: 4
+                  overdueTasks: 2
+                  avgGoalProgress: 60
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId of the resource.
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+    Page:
+      name: page
+      in: query
+      description: 1-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: endTime must be later than startTime
+              field: endTime
+    UnauthorizedError:
+      description: Missing/invalid/expired token or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: Authentication is required
+    NotFoundError:
+      description: Resource not found for this user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+    ConflictError:
+      description: Duplicate resource conflict, such as an already registered email
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: CONFLICT
+              message: Email is already registered
+              field: email
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: SERVER_ERROR
+              message: An unexpected error occurred
+  schemas:
+    RegisterInput:
+      type: object
+      additionalProperties: false
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Trimmed and must not be blank.
+        email:
+          type: string
+          format: email
+          description: Normalized to lowercase; must be unique.
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+    LoginInput:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+    User:
+      type: object
+      required: [_id, name, email, createdAt]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        createdAt:
+          $ref: '#/components/schemas/DateTime'
+    AuthData:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: JWT valid for 7 days.
+        user:
+          $ref: '#/components/schemas/User'
+    AuthResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/AuthData'
+    UserResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/User'
+    Task:
+      type: object
+      required: [_id, title, description, status, dueDate, goalId, priority, completedAt, createdAt, updatedAt]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        dueDate:
+          allOf:
+            - $ref: '#/components/schemas/NullableDateTime'
+          description: End of the selected local due date, serialized in UTC.
+        goalId:
+          allOf:
+            - $ref: '#/components/schemas/NullableObjectId'
+          description: Goal ID string or null; never a populated Goal object.
+        priority:
+          type: string
+          enum: [low, medium, high]
+        completedAt:
+          $ref: '#/components/schemas/NullableDateTime'
+        createdAt:
+          $ref: '#/components/schemas/DateTime'
+        updatedAt:
+          $ref: '#/components/schemas/DateTime'
+    TaskCreateInput:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+          default: null
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+          default: todo
+        dueDate:
+          allOf:
+            - $ref: '#/components/schemas/NullableDateTime'
+          default: null
+        goalId:
+          allOf:
+            - $ref: '#/components/schemas/NullableObjectId'
+          default: null
+        priority:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+    TaskReplaceInput:
+      type: object
+      additionalProperties: false
+      required: [title, description, status, dueDate, goalId, priority]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        dueDate:
+          $ref: '#/components/schemas/NullableDateTime'
+        goalId:
+          $ref: '#/components/schemas/NullableObjectId'
+        priority:
+          type: string
+          enum: [low, medium, high]
+    TaskResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/Task'
+    TaskListResponse:
+      type: object
+      required: [success, data, pagination]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    Goal:
+      type: object
+      required: [_id, title, deadline, progressMode, manualProgress, progress, status, createdAt]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        title:
+          type: string
+        deadline:
+          $ref: '#/components/schemas/NullableDateTime'
+        progressMode:
+          type: string
+          enum: [task_based, manual]
+        manualProgress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Editable only on manual-mode creation or through the progress PATCH endpoint.
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          readOnly: true
+          description: Calculated by backend according to progressMode.
+        status:
+          type: string
+          enum: [active, completed]
+          readOnly: true
+          description: completed when progress is 100; otherwise active.
+        createdAt:
+          $ref: '#/components/schemas/DateTime'
+    GoalCreateInput:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        deadline:
+          allOf:
+            - $ref: '#/components/schemas/NullableDateTime'
+          default: null
+        progressMode:
+          type: string
+          enum: [task_based, manual]
+          default: task_based
+        manualProgress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 0
+          description: Used for a manual-mode Goal; do not send to initialize task_based progress.
+    GoalReplaceInput:
+      type: object
+      additionalProperties: false
+      required: [title, deadline, progressMode]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        deadline:
+          $ref: '#/components/schemas/NullableDateTime'
+        progressMode:
+          type: string
+          enum: [task_based, manual]
+    GoalProgressInput:
+      type: object
+      additionalProperties: false
+      required: [manualProgress]
+      properties:
+        manualProgress:
+          type: integer
+          minimum: 0
+          maximum: 100
+    GoalResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/Goal'
+    GoalListResponse:
+      type: object
+      required: [success, data, pagination]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Goal'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    Event:
+      type: object
+      required: [_id, title, startTime, endTime, description, createdAt]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        title:
+          type: string
+        startTime:
+          $ref: '#/components/schemas/DateTime'
+        endTime:
+          $ref: '#/components/schemas/DateTime'
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          $ref: '#/components/schemas/DateTime'
+    EventCreateInput:
+      type: object
+      additionalProperties: false
+      required: [title, startTime, endTime]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        startTime:
+          $ref: '#/components/schemas/DateTime'
+        endTime:
+          $ref: '#/components/schemas/DateTime'
+        description:
+          type: string
+          nullable: true
+          default: null
+    EventReplaceInput:
+      type: object
+      additionalProperties: false
+      required: [title, startTime, endTime, description]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        startTime:
+          $ref: '#/components/schemas/DateTime'
+        endTime:
+          $ref: '#/components/schemas/DateTime'
+        description:
+          type: string
+          nullable: true
+    EventResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/Event'
+    EventListResponse:
+      type: object
+      required: [success, data, pagination]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    DashboardSummary:
+      type: object
+      required: [totalTasks, completedTasks, overdueTasks, avgGoalProgress]
+      properties:
+        totalTasks:
+          type: integer
+          minimum: 0
+        completedTasks:
+          type: integer
+          minimum: 0
+        overdueTasks:
+          type: integer
+          minimum: 0
+        avgGoalProgress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Rounded average progress of active Goals; 0 if there are no active Goals.
+    DashboardResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/DashboardSummary'
+    DeleteResult:
+      type: object
+      required: [_id, deleted]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        deleted:
+          type: boolean
+          enum: [true]
+    DeleteResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/DeleteResult'
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, NOT_FOUND, CONFLICT, SERVER_ERROR]
+            message:
+              type: string
+            field:
+              type: string
+              description: Request body field or query parameter associated with the error, when applicable.
+    ObjectId:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+      example: '652f1d8c4a2b9e8c7d6f1234'
+    NullableObjectId:
+      type: string
+      nullable: true
+      pattern: '^[0-9a-fA-F]{24}$'
+      example: '652f1d8c4a2b9e8c7d6f1234'
+    DateTime:
+      type: string
+      format: date-time
+      pattern: 'Z$'
+      example: '2026-10-10T16:59:59.999Z'
+      description: ISO-8601 date-time in UTC; must end in Z.
+    NullableDateTime:
+      type: string
+      format: date-time
+      nullable: true
+      pattern: 'Z$'
+      example: '2026-10-10T16:59:59.999Z'
+      description: ISO-8601 date-time in UTC ending in Z, or null for an empty optional date.
