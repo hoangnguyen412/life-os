@@ -1,0 +1,67 @@
+/* Global styling entry: Tailwind utilities, project tokens and reusable component classes. */
+@import "tailwindcss";
+
+/* Shared palette: update these tokens to change the app and authentication screens. */
+@theme {
+  /* Surface, text and border colors shared by workspace and authentication layouts. */
+  --color-os-bg: #ffffff;
+  --color-os-ink: #183b38;
+  --color-os-muted: #607772;
+  --color-os-line: #d8e5e0;
+  --color-os-soft: #edf5f1;
+  --color-os-canvas: #f6f9f7;
+  --color-os-primary: #0f766e;
+  --color-os-primary-hover: #115e59;
+  --color-os-primary-soft: #e3f2ec;
+}
+
+@layer components {
+  /* @apply collects Tailwind utilities for repeated button, input and card styles. */
+  .os-button {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-os-line bg-os-bg px-4 py-2 text-sm font-medium text-os-ink transition-colors hover:bg-os-soft disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .os-button-primary {
+    /* Primary actions use the shared brand tokens; danger actions use semantic red. */
+    @apply border-os-primary bg-os-primary text-white hover:bg-os-primary-hover;
+  }
+  .os-button-danger {
+    @apply border-red-200 text-red-700 hover:bg-red-50;
+  }
+  .os-input {
+    @apply mt-2 min-h-11 w-full rounded-lg border border-os-line bg-os-bg px-3 py-2.5 text-base text-os-ink sm:text-sm;
+  }
+  .os-card {
+    @apply rounded-2xl border border-os-line bg-os-bg p-5 sm:p-6;
+  }
+}
+
+@layer base {
+  /* Base rules establish font rendering, light color scheme and minimum mobile width. */
+  :root {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color-scheme: light;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: var(--color-os-bg);
+    color: var(--color-os-ink);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    /* Keep a visible focus ring for keyboard navigation across all controls. */
+    outline: 2px solid var(--color-os-primary);
+    outline-offset: 3px;
+  }
+}
