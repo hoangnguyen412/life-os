@@ -96,7 +96,7 @@ export default function CalendarPage() {
                   // Events keep time labels; tasks use Task labels and status-specific styling.
                   // Mobile cells show symbols; accessible labels and the list retain full details.
                   const appearance = item.kind === 'task' ? taskAppearance(item) : null
-                  return <button key={item.key} aria-label={`View ${item.kind} ${item.title} on ${date}${item.allDay ? ` · Task · ${appearance.label}` : ''}`} title={`${item.title} · ${item.allDay ? `Task · ${appearance.label}` : formatTime(item.startTime)}`} className={`mb-1 block min-h-7 w-full overflow-hidden rounded border p-1 text-left text-[10px] sm:text-xs ${appearance ? `${appearance.classes} border-l-4 font-medium` : 'border-transparent bg-os-primary-soft text-os-primary'}`} onClick={() => modal.open(item.kind, 'detail', item._id)}>
+                  return <button key={item.key} aria-label={`View ${item.kind} ${item.title} on ${date}${item.allDay ? ` · Task · ${appearance.label}` : ''}`} title={`${item.title} · ${item.allDay ? `Task · ${appearance.label}` : formatTime(item.startTime)}`} className={`mb-1 block min-h-7 w-full overflow-hidden rounded border p-1 text-left text-[10px] sm:text-xs ${appearance ? `${appearance.classes} border-l-4 font-medium` : 'border-os-primary bg-os-primary font-semibold text-white shadow-sm hover:bg-os-primary-hover'}`} onClick={() => modal.open(item.kind, 'detail', item._id)}>
                     <span className="hidden break-words sm:block">{item.allDay ? `${appearance.symbol} Task · ` : `${formatTime(item.startTime)} `}{item.title}</span>
                     <span className="block text-center sm:hidden">{appearance?.symbol ?? '●'}</span>
                   </button>
@@ -110,7 +110,7 @@ export default function CalendarPage() {
         <h2 className="mb-5 text-lg font-medium">Schedule this month</h2>
         {monthItems.length ? <div className="space-y-3">{monthItems.map((item) => {
           const appearance = item.kind === 'task' ? taskAppearance(item) : null
-          return <article key={item.key} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 ${appearance ? `${appearance.classes} border-l-4` : 'border-os-line'}`}>
+          return <article key={item.key} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 ${appearance ? `${appearance.classes} border-l-4` : 'border-teal-300 border-l-4 border-l-os-primary bg-teal-100 text-os-ink'}`}>
             <div className="min-w-0 flex-1">
               <h3 className="font-medium break-words">{item.title}</h3>
               <p className="mt-1 text-xs">{item.allDay ? `${formatDate(item.dueDate)} · Task · ${appearance.label}` : `${formatDate(item.startTime)} · ${formatTime(item.startTime)} – ${dateOnly(item.endTime) !== dateOnly(item.startTime) ? `${formatDate(item.endTime)} · ` : ''}${formatTime(item.endTime)}`}</p>

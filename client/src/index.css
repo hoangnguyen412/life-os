@@ -33,6 +33,22 @@
   .os-card {
     @apply rounded-2xl border border-os-line bg-os-bg p-5 sm:p-6;
   }
+
+  /* Measure the list itself so sidebar width and browser zoom do not force wide single cards. */
+  .task-list-container {
+    container: task-list / inline-size;
+  }
+  .task-card-grid {
+    display: grid;
+    gap: 1rem;
+  }
+  @container task-list (min-width: 34rem) {
+    .task-card-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(4, auto);
+      grid-auto-flow: column;
+    }
+  }
 }
 
 @layer base {

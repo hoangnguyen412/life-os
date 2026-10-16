@@ -114,7 +114,7 @@ wireframe. Ngày được đặt tương đối theo ngày hiện tại ở Vi�
 `manualProgress`...), không dùng ID số trong bản wireframe cũ.
 
 `MockDataProvider` chia sẻ dữ liệu giữa bốn trang. Dashboard có 4 số liệu, Tasks
-có bộ lọc/sắp xếp/phân trang (4 items/trang), Goals có progress bar, Calendar có
+có bộ lọc/sắp xếp/phân trang (8 items/trang, 4 card mỗi cột trên desktop), Goals có progress bar, Calendar có
 lịch tháng và danh sách sự kiện. Có form tạo/sửa, xem chi tiết và xác nhận xóa.
 Thay đổi Task cập nhật Goal task-based; xóa Goal giữ Task và gỡ liên kết.
 Calendar hiển thị CalendarEvents có giờ và Task có dueDate dưới dạng cả ngày.
