@@ -1,0 +1,11 @@
+# Dependencies and build output can be regenerated from the tracked source and lockfile.
+node_modules/
+dist/
+# Keep local configuration and environment values out of version control.
+*.local
+.env
+.env.*
+# A documented template may be tracked when one is created; no real values belong in it.
+!.env.example
+# Runtime logs are local output, not project source.
+*.log
