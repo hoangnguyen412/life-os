@@ -382,7 +382,16 @@ npm install
 npm run dev
 ```
 
-Environment variables and deployment configuration are documented separately.
+Before starting the server for the first time, copy `server/.env.example` to
+`server/.env` and set `MONGODB_URI` and a private `JWT_SECRET` of at least 32
+characters. The API listens on port 5000 by default. Swagger documentation is
+available at `/api-docs`, and the health check is available at `/health`.
+
+Run the backend foundation checks with:
+
+```bash
+npm test
+```
 
 ---
 
