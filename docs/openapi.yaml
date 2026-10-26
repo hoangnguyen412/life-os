@@ -95,7 +95,7 @@ paths:
       parameters:
         - name: status
           in: query
-          description: Filter by task status.
+          description: Filter by task status (todo, in_progress, or done).
           schema:
             type: string
             enum: [todo, in_progress, done]
@@ -103,7 +103,10 @@ paths:
           in: query
           description: Goal ObjectId; use `none` to select tasks without a Goal.
           schema:
-            type: string
+            oneOf:
+              - $ref: '#/components/schemas/ObjectId'
+              - type: string
+                enum: [none]
         - name: overdue
           in: query
           description: Filter according to dueDate < now and status != done. Tasks without dueDate are not overdue.
@@ -111,7 +114,7 @@ paths:
             type: boolean
         - name: sort
           in: query
-          description: dueDate_asc sorts null due dates last; priority_desc sorts high to low; createdAt_desc sorts newest first.
+          description: dueDate_asc sorts due date ascending with null dates last, then priority high to low, newest first, and _id; priority_desc sorts priority high to low, then due date ascending with null dates last, newest first, and _id; createdAt_desc sorts newest first, then _id.
           schema:
             type: string
             enum: [dueDate_asc, priority_desc, createdAt_desc]
@@ -218,6 +221,7 @@ paths:
     delete:
       tags: [Tasks]
       summary: Delete a task
+      description: Deleting a linked Task recalculates progress for its Goal.
       responses:
         '200':
           description: Task deleted; linked Goal progress is recalculated
