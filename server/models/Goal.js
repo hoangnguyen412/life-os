@@ -1,13 +1,20 @@
 const mongoose = require('mongoose');
 
-// Task CRUD uses the owner reference to validate links and the progress fields
-// to maintain Goal progress when linked Tasks change. Goal CRUD remains a later phase.
 const goalSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
     index: true,
+  },
+  title: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  deadline: {
+    type: Date,
+    default: null,
   },
   progressMode: {
     type: String,
@@ -18,12 +25,14 @@ const goalSchema = new mongoose.Schema({
     type: Number,
     min: 0,
     max: 100,
+    validate: Number.isInteger,
     default: 0,
   },
   progress: {
     type: Number,
     min: 0,
     max: 100,
+    validate: Number.isInteger,
     default: 0,
   },
   status: {
@@ -31,6 +40,9 @@ const goalSchema = new mongoose.Schema({
     enum: ['active', 'completed'],
     default: 'active',
   },
-}, { strict: false, versionKey: false });
+}, {
+  timestamps: { createdAt: true, updatedAt: false },
+  versionKey: false,
+});
 
 module.exports = mongoose.model('Goal', goalSchema);
