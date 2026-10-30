@@ -177,8 +177,47 @@ test('create rejects a Goal that is missing or belongs to another user', async (
   assert.equal(taskCreated, false);
 });
 
+test('creating a Task with an owned Goal recalculates its progress', async (t) => {
+  let recalculated;
+  t.mock.method(Goal, 'exists', async (query) => {
+    assert.equal(query.userId.toString(), USER_ID);
+    return { _id: new mongoose.Types.ObjectId(GOAL_ID) };
+  });
+  t.mock.method(Task, 'create', async (input) => taskDocument({
+    ...input,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }));
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId) => {
+    recalculated = { goalId, userId };
+  });
+
+  const created = await taskService.createTask(USER_ID, { title: 'Linked', goalId: GOAL_ID });
+  assert.equal(created.goalId, GOAL_ID);
+  assert.deepEqual(recalculated, { goalId: GOAL_ID, userId: USER_ID });
+});
+
+test('updating a Task rejects a Goal that belongs to another user', async (t) => {
+  const doc = taskDocument();
+  let saved = false;
+  let goalQuery;
+  doc.save = async () => { saved = true; };
+  t.mock.method(Task, 'findOne', async () => doc);
+  t.mock.method(Goal, 'exists', async (query) => { goalQuery = query; return null; });
+
+  await assert.rejects(taskService.updateTask(USER_ID, TASK_ID, {
+    title: 'Task', description: null, status: 'todo', dueDate: null,
+    goalId: GOAL_ID, priority: 'medium',
+  }), (error) => error.status === 404 && error.code === 'NOT_FOUND');
+
+  assert.equal(goalQuery.userId.toString(), USER_ID);
+  assert.equal(saved, false);
+  assert.equal(doc.goalId, null);
+});
+
 test('task-based Goal recalculation uses only its owner’s Tasks and derives status', async (t) => {
   const goal = {
+    _id: new mongoose.Types.ObjectId(GOAL_ID),
     progressMode: 'task_based',
     progress: 0,
     status: 'active',
