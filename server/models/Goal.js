@@ -26,7 +26,7 @@ const goalSchema = new mongoose.Schema({
     min: 0,
     max: 100,
     validate: Number.isInteger,
-    default: 0,
+    default: undefined,
   },
   progress: {
     type: Number,

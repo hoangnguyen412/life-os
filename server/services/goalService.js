@@ -10,7 +10,7 @@ function serializeGoal(goal) {
     title: source.title,
     deadline: source.deadline ? new Date(source.deadline).toISOString() : null,
     progressMode: source.progressMode,
-    manualProgress: source.manualProgress,
+    ...(source.progressMode === 'manual' ? { manualProgress: source.manualProgress } : {}),
     progress: source.progress,
     status: source.status,
     createdAt: new Date(source.createdAt).toISOString(),
@@ -87,15 +87,17 @@ async function listGoals(userId, query) {
 async function createGoal(userId, input) {
   const progressMode = input.progressMode ?? 'task_based';
   const manualProgress = progressMode === 'manual' ? (input.manualProgress ?? 0) : 0;
-  const goal = await Goal.create({
+  const goalFields = {
     userId: new mongoose.Types.ObjectId(userId),
     title: input.title.trim(),
     deadline: input.deadline ?? null,
     progressMode,
-    manualProgress,
     progress: progressMode === 'manual' ? manualProgress : 0,
     status: manualProgress === 100 && progressMode === 'manual' ? 'completed' : 'active',
-  });
+  };
+  if (progressMode === 'manual') goalFields.manualProgress = manualProgress;
+
+  const goal = await Goal.create(goalFields);
 
   const currentGoal = progressMode === 'task_based'
     ? (await recalculateProgress(goal._id, userId) ?? goal)
@@ -129,6 +131,7 @@ async function updateGoal(userId, goalId, input) {
   goal.title = input.title.trim();
   goal.deadline = input.deadline ?? null;
   goal.progressMode = nextMode;
+  if (nextMode === 'task_based') goal.manualProgress = undefined;
   await calculateProgress(goal, userId);
   await goal.save();
   return serializeGoal(goal);

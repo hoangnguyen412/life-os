@@ -186,14 +186,29 @@ test('Goal create stores only authenticated ownership and derives manual fields'
 
 test('task_based Goal creation starts at zero percent and active', async (t) => {
   const goal = goalDocument();
-  t.mock.method(Goal, 'create', async (input) => Object.assign(goal, input));
+  let persistedGoalFields;
+  t.mock.method(Goal, 'create', async (input) => {
+    persistedGoalFields = input;
+    return Object.assign(goal, input);
+  });
   t.mock.method(Goal, 'findOne', async () => goal);
   t.mock.method(Task, 'countDocuments', async () => 0);
 
   const created = await goalService.createGoal(USER_ID, { title: 'Task Goal' });
+  assert.equal(Object.hasOwn(persistedGoalFields, 'manualProgress'), false);
+  assert.equal(Object.hasOwn(created, 'manualProgress'), false);
   assert.equal(created.progressMode, 'task_based');
   assert.equal(created.progress, 0);
   assert.equal(created.status, 'active');
+});
+
+test('manual Goal responses include manualProgress', () => {
+  const serialized = goalService.serializeGoal(goalDocument({
+    progressMode: 'manual',
+    manualProgress: 40,
+    progress: 40,
+  }));
+  assert.equal(serialized.manualProgress, 40);
 });
 
 test('Goal list scopes queries, sorts newest first, and returns pagination', async (t) => {
@@ -329,6 +344,8 @@ test('PUT switching to manual copies current task progress; switching back recal
   });
   assert.equal(taskBased.progress, 50);
   assert.equal(taskBased.status, 'active');
+  assert.equal(Object.hasOwn(taskBased, 'manualProgress'), false);
+  assert.equal(goal.manualProgress, undefined);
   assert.ok(taskFilters.length > 0);
   assert.ok(taskFilters.every((filter) => filter.userId.toString() === USER_ID));
 });
