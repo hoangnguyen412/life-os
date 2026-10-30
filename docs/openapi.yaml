@@ -397,6 +397,7 @@ paths:
     get:
       tags: [Calendar Events]
       summary: List/paginate calendar events, optionally filtered by visible time range
+      description: Results belong to the authenticated user. Provide both `from` and `to` to return events overlapping the range (`startTime < to` and `endTime > from`).
       parameters:
         - name: from
           in: query
@@ -430,6 +431,7 @@ paths:
     post:
       tags: [Calendar Events]
       summary: Create a calendar event
+      description: Creates an event for the authenticated user. `endTime` must be later than `startTime`.
       requestBody:
         required: true
         content:
@@ -460,6 +462,7 @@ paths:
     get:
       tags: [Calendar Events]
       summary: Get one calendar event
+      description: Returns an event only when it belongs to the authenticated user.
       responses:
         '200':
           description: Event details
@@ -478,7 +481,7 @@ paths:
     put:
       tags: [Calendar Events]
       summary: Replace all editable event fields
-      description: Send title, startTime, endTime, and description. Use null to clear description.
+      description: Send title, startTime, endTime, and description. Use null to clear description. `endTime` must be later than `startTime`.
       requestBody:
         required: true
         content:
@@ -503,6 +506,7 @@ paths:
     delete:
       tags: [Calendar Events]
       summary: Delete a calendar event
+      description: Deletes an event only when it belongs to the authenticated user.
       responses:
         '200':
           description: Event deleted
@@ -523,6 +527,7 @@ paths:
     get:
       tags: [Dashboard]
       summary: Get dashboard summary statistics
+      description: Returns statistics for the authenticated user only. Overdue Tasks have dueDate before the current time and status other than done. Average Goal progress includes active Goals only and is rounded to the nearest integer.
       responses:
         '200':
           description: Dashboard metrics for the authenticated user

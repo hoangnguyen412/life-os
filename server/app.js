@@ -6,6 +6,8 @@ const YAML = require('yaml');
 const authRoutes = require('./routes/authRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const goalRoutes = require('./routes/goalRoutes');
+const eventRoutes = require('./routes/eventRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -23,6 +25,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/goals', goalRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.use((req, res, next) => {
   const error = new Error('Route not found');
