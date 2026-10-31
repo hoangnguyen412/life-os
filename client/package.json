@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/mocks/mockStore.test.js src/utils/calendar.test.js",
+    "test": "node --test src/mocks/mockStore.test.js src/utils/calendar.test.js src/services/apiClient.test.js",
     "preview": "vite preview"
   },
   "engines": {

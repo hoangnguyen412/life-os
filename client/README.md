@@ -140,6 +140,38 @@ Dashboard, sắp xếp và chuyển ngày giờ UTC+07:00.
 Các test Calendar kiểm tra ngày deadline, đổi/xóa Task, ranh giới tháng,
 file ICS cả ngày, giờ UTC, ID ổn định và xử lý dấu tiếng Việt/ký tự đặc biệt.
 
+## Cấu hình và các hàm gọi API
+
+Copy `.env.example` thành `.env`. Khi chạy backend local, dùng:
+
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+URL gồm `/api` ở cuối. Khi đổi giá trị, khởi động lại Vite; khi deploy, đặt biến
+này trên hosting frontend trước khi build. `.env` không được đưa lên Git.
+
+`src/services/apiClient.js` gọi API bằng `fetch`, gửi JWT cho endpoint cần Auth
+và trả nguyên `{ success, data, pagination? }`. Lỗi là `ApiError` với `message`,
+`status`, `code`, `field`; `field` dùng để hiển thị lỗi ở ô nhập tương ứng.
+Các hàm nhận tùy chọn `{ signal }` ở tham số cuối để hủy request khi cần.
+
+- `authApi.js`: `register`, `login`, `getCurrentUser`, `logout`. Đăng ký/đăng nhập
+  thành công lưu JWT bằng `authToken.js`; logout xóa JWT tại máy.
+- `taskApi.js`: `listTasks`, `getTask`, `createTask`, `updateTask`, `deleteTask`.
+  `updateTask(id, draft)` cần đủ trường chỉnh sửa, kể cả khi chỉ đổi trạng thái.
+- `goalApi.js`: `listGoals`, `getGoal`, `createGoal`, `updateGoal`,
+  `updateGoalProgress`, `deleteGoal`. Tiến độ manual dùng PATCH riêng.
+
+JWT dùng key `life_os_token` trong localStorage. Request có Auth nhận 401 sẽ xóa
+token tương ứng và về Login; đăng nhập sai chỉ trả lỗi để form hiển thị.
+Lỗi mạng và response không hợp lệ có mã `NETWORK_ERROR` và `INVALID_RESPONSE`.
+Ngày giờ truyền vào service phải là UTC ISO; các trường chỉ đọc không được gửi.
+
+Các service đã sẵn sàng nhưng chưa nối vào form/trang. Giao diện vẫn dùng mock
+data; chưa có Auth guard. Test service dùng fetch/storage giả, không gọi backend
+hoặc ghi dữ liệu lên MongoDB Atlas.
+
 ## Chuẩn bị cho Vercel
 
 `vercel.json` đã có SPA rewrite về `index.html` để mở/refresh trực tiếp `/tasks`
