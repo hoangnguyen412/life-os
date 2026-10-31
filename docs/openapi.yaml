@@ -95,7 +95,7 @@ paths:
       parameters:
         - name: status
           in: query
-          description: Filter by task status.
+          description: Filter by task status (todo, in_progress, or done).
           schema:
             type: string
             enum: [todo, in_progress, done]
@@ -103,7 +103,10 @@ paths:
           in: query
           description: Goal ObjectId; use `none` to select tasks without a Goal.
           schema:
-            type: string
+            oneOf:
+              - $ref: '#/components/schemas/ObjectId'
+              - type: string
+                enum: [none]
         - name: overdue
           in: query
           description: Filter according to dueDate < now and status != done. Tasks without dueDate are not overdue.
@@ -111,7 +114,7 @@ paths:
             type: boolean
         - name: sort
           in: query
-          description: dueDate_asc sorts null due dates last; priority_desc sorts high to low; createdAt_desc sorts newest first.
+          description: dueDate_asc sorts due date ascending with null dates last, then priority high to low, newest first, and _id; priority_desc sorts priority high to low, then due date ascending with null dates last, newest first, and _id; createdAt_desc sorts newest first, then _id.
           schema:
             type: string
             enum: [dueDate_asc, priority_desc, createdAt_desc]
@@ -218,6 +221,7 @@ paths:
     delete:
       tags: [Tasks]
       summary: Delete a task
+      description: Deleting a linked Task recalculates progress for its Goal.
       responses:
         '200':
           description: Task deleted; linked Goal progress is recalculated
@@ -238,7 +242,7 @@ paths:
     get:
       tags: [Goals]
       summary: List and paginate goals
-      description: Goals are sorted newest first by createdAt (descending).
+      description: Returns only the authenticated user's Goals, sorted newest first by createdAt with _id as a stable tie-breaker.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -258,6 +262,7 @@ paths:
     post:
       tags: [Goals]
       summary: Create a goal
+      description: Task-based Goals start at 0 and manual Goals start at manualProgress. Goal status is derived from progress. progress, status, and userId are server-managed.
       requestBody:
         required: true
         content:
@@ -313,7 +318,7 @@ paths:
     put:
       tags: [Goals]
       summary: Replace editable goal fields
-      description: Send title, deadline, and progressMode. Progress is backend-managed; use the progress PATCH endpoint for manual progress.
+      description: Send title, deadline, and progressMode. Switching to task_based recalculates progress from linked Tasks. Switching to manual copies current progress into manualProgress. progress and status are backend-managed.
       requestBody:
         required: true
         content:
@@ -363,7 +368,7 @@ paths:
     patch:
       tags: [Goals]
       summary: Set manual progress for a manual-mode goal
-      description: Only valid when progressMode is manual. For task_based goals, return VALIDATION_ERROR with field progressMode.
+      description: Accepts manualProgress from 0 through 100 only when progressMode is manual. For task_based Goals, returns VALIDATION_ERROR with field progressMode. Progress and status are recalculated by the backend.
       requestBody:
         required: true
         content:
@@ -392,6 +397,7 @@ paths:
     get:
       tags: [Calendar Events]
       summary: List/paginate calendar events, optionally filtered by visible time range
+      description: Results belong to the authenticated user. Provide both `from` and `to` to return events overlapping the range (`startTime < to` and `endTime > from`).
       parameters:
         - name: from
           in: query
@@ -425,6 +431,7 @@ paths:
     post:
       tags: [Calendar Events]
       summary: Create a calendar event
+      description: Creates an event for the authenticated user. `endTime` must be later than `startTime`.
       requestBody:
         required: true
         content:
@@ -455,6 +462,7 @@ paths:
     get:
       tags: [Calendar Events]
       summary: Get one calendar event
+      description: Returns an event only when it belongs to the authenticated user.
       responses:
         '200':
           description: Event details
@@ -473,7 +481,7 @@ paths:
     put:
       tags: [Calendar Events]
       summary: Replace all editable event fields
-      description: Send title, startTime, endTime, and description. Use null to clear description.
+      description: Send title, startTime, endTime, and description. Use null to clear description. `endTime` must be later than `startTime`.
       requestBody:
         required: true
         content:
@@ -498,6 +506,7 @@ paths:
     delete:
       tags: [Calendar Events]
       summary: Delete a calendar event
+      description: Deletes an event only when it belongs to the authenticated user.
       responses:
         '200':
           description: Event deleted
@@ -518,6 +527,7 @@ paths:
     get:
       tags: [Dashboard]
       summary: Get dashboard summary statistics
+      description: Returns statistics for the authenticated user only. Overdue Tasks have dueDate before the current time and status other than done. Average Goal progress includes active Goals only and is rounded to the nearest integer.
       responses:
         '200':
           description: Dashboard metrics for the authenticated user
