@@ -41,12 +41,12 @@ function buildTaskFilter(userId, query, now = new Date()) {
     });
   }
 
-  if (query.overdue === true) {
+  if (query.overdue === true || query.overdue === 'true') {
     conditions.push({
       dueDate: { $lt: now },
       status: { $ne: 'done' },
     });
-  } else if (query.overdue === false) {
+  } else if (query.overdue === false || query.overdue === 'false') {
     conditions.push({
       $or: [
         { dueDate: { $gte: now } },
