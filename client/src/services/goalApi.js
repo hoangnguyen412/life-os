@@ -4,6 +4,16 @@ import { apiRequest } from './apiClient.js'
 export function listGoals({ page, limit } = {}, options) {
   return apiRequest('/goals', { query: { page, limit }, signal: options?.signal })
 }
+// Dropdowns need all owned Goals, not only the first page of the Goal list.
+export async function listAllGoals(options) {
+  const first = await listGoals({ page: 1, limit: 100 }, options)
+  const goals = [...first.data]
+  for (let page = 2; page <= first.pagination.totalPages; page += 1) {
+    const next = await listGoals({ page, limit: 100 }, options)
+    goals.push(...next.data)
+  }
+  return goals
+}
 export const getGoal = (id, options) => apiRequest(`/goals/${encodeURIComponent(id)}`, { signal: options?.signal })
 export function createGoal(goal, options) {
   const body = {

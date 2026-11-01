@@ -73,7 +73,7 @@ Bước 3 có `AppLayout`, `Sidebar`, `Header` và vùng nội dung dùng chung.
 Đăng nhập để mở khung ứng dụng. Sidebar có Dashboard, Tasks, Goals, Calendar và
 Sign out (xóa token và trở về Login). Header/Sidebar hiện tên và email của user
 đã xác thực. Trên điện thoại, nút menu mở/đóng phần điều hướng.
-Nội dung mỗi mục đã dùng dữ liệu mẫu ở bước 5.
+Tasks dùng dữ liệu backend thật; các mục còn lại đang dùng dữ liệu mẫu ở bước 5.
 
 Bảng màu chung được tập trung ở `@theme` trong `src/index.css`:
 
@@ -106,7 +106,7 @@ Tiêu đề tab trình duyệt thay đổi theo trang.
 
 Bốn trang ứng dụng đã được bảo vệ bởi `RequireAuth`. Chưa đăng nhập thì về Login;
 sau khi đăng nhập quay lại trang đã yêu cầu. Link xem workspace không cần tài khoản
-đã được bỏ. Task/Goal/Calendar/Dashboard vẫn dùng dữ liệu mẫu trong workspace.
+đã được bỏ. Trang Tasks đã dùng API thật; Goal/Calendar/Dashboard vẫn dùng dữ liệu mẫu.
 
 ## Mock data ở bước 5
 
@@ -115,12 +115,12 @@ wireframe. Ngày được đặt tương đối theo ngày hiện tại ở Vi�
 để lưu trong bộ nhớ. ID và field dùng contract hiện tại (`_id`, `goalId`,
 `manualProgress`...), không dùng ID số trong bản wireframe cũ.
 
-`MockDataProvider` chia sẻ dữ liệu giữa bốn trang. Dashboard có 4 số liệu, Tasks
-có bộ lọc/sắp xếp/phân trang (8 items/trang, 4 card mỗi cột trên desktop), Goals có progress bar, Calendar có
+`MockDataProvider` còn dùng cho Dashboard, Goals và Calendar. Dashboard có 4 số liệu,
+Goals có progress bar, Calendar có
 lịch tháng và danh sách sự kiện. Có form tạo/sửa, xem chi tiết và xác nhận xóa.
 Thay đổi Task cập nhật Goal task-based; xóa Goal giữ Task và gỡ liên kết.
 Calendar hiển thị CalendarEvents có giờ và Task có dueDate dưới dạng cả ngày.
-Task được lấy trực tiếp từ dữ liệu Tasks: đổi deadline sẽ chuyển ngày trên lịch;
+Task mẫu được lấy từ mock store: đổi deadline mẫu sẽ chuyển ngày trên lịch;
 gỡ deadline hoặc xóa Task sẽ gỡ mục đó, không tạo CalendarEvent trùng lặp.
 Task màu vàng, quá hạn màu đỏ, hoàn thành màu xám; sự kiện màu xanh teal.
 Bấm mục trên lịch để xem/sửa Task hoặc sự kiện gốc.
@@ -132,7 +132,7 @@ nhập file. Đây là bản xuất tại thời điểm tải, không tự đ�
 Quy tắc xuất theo [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html);
 [hướng dẫn nhập Google Calendar](https://support.google.com/calendar/answer/37118).
 
-Mở **Preview controls** phía trên nội dung để thử Loading/Error, **Empty data**
+Ở Dashboard/Goals/Calendar, mở **Preview controls** để thử Loading/Error, **Empty data**
 hoặc **Reset sample data**. Error có nút Try again. Thay đổi chỉ ở bộ nhớ,
 refresh sẽ khôi phục dữ liệu mẫu; dữ liệu này chưa gọi API hay ghi database.
 Auth đã gọi backend thật và lưu JWT trong localStorage. Dữ liệu mock được khởi
@@ -181,11 +181,36 @@ Không có store quản lý phiên riêng hoặc đồng bộ đăng xuất gi�
 
 Để kiểm thử thật, backend phải chạy tại URL trong `.env`, kết nối MongoDB và cho
 phép CORS từ địa chỉ frontend. Frontend không cần MongoDB URI hoặc JWT secret.
-Các trang dữ liệu chưa nối Task/Goal API; chúng vẫn dùng mock data.
+Trang Tasks đã nối Task API; trang Goals, Calendar và Dashboard chưa nối API thật.
 
 Test service dùng fetch/storage giả, không gọi backend hoặc ghi Atlas.
 Các test kiểm tra payload đăng nhập/đăng ký, lưu/xóa JWT, lấy user, xử lý 401,
 lỗi API và validation cơ bản. Cần chạy frontend/backend để kiểm thử thao tác thật.
+
+## Trang Tasks dùng API thật
+
+`TasksPage.jsx` gọi API khi mở trang hoặc thay đổi bộ lọc. Backend lọc theo trạng
+thái/Goal/quá hạn, sắp xếp và phân trang 8 Task/trang. Bố cục desktop vẫn 4 card
+mỗi cột. Loading/lỗi/danh sách trống phản ánh request thật; không dùng Preview controls.
+
+`TaskDialog.jsx` lấy chi tiết mới nhất trước khi sửa, gọi API thêm/sửa/xóa và đổi
+trạng thái. `TaskForm.jsx` giữ draft, validate và hiển thị lỗi từng field. Nút gửi
+bị khóa trong lúc lưu; lưu lỗi thì giữ nội dung để sửa và thử lại. Xóa cần xác nhận.
+Lưu thành công tải lại danh sách và tổng số từ backend; xóa trang cuối sẽ về trang
+còn dữ liệu. Task lưu trên backend sẽ còn sau refresh khi backend hoạt động đúng.
+
+Goal ở bộ lọc và form Task lấy từ API thật qua `listAllGoals`, đọc hết các trang.
+Goal mẫu ở trang Goals không được đưa vào form Task. Chưa có Goal thật thì vẫn
+tạo Task với `goalId: null`. Ngày Task dùng cuối ngày theo múi giờ trình duyệt,
+chuyển sang UTC ISO; xóa ngày hoặc Goal trong form gửi `null`.
+
+Dashboard/Goals/Calendar vẫn là dữ liệu mẫu, nên chưa phản ánh Task thật vừa lưu.
+Tiến độ Goal liên quan do backend cập nhật; frontend không tự tính tiến độ thật.
+
+Lỗi BE đã ghi nhận: trên Express 5, sau validation `req.query.overdue` vẫn là
+chuỗi trong khi `buildTaskFilter` so sánh boolean. Vì vậy bộ lọc quá hạn chưa
+áp dụng đúng; BE cần chuẩn hóa query trước khi gọi service. Frontend gửi đúng
+`overdue=true` theo API contract, chưa sửa code BE.
 
 ## Chuẩn bị cho Vercel
 

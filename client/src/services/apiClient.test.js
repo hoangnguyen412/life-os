@@ -101,6 +101,28 @@ test('detail/delete endpoints encode IDs, list Goals paginates, and signals reac
   assert.equal(calls[4].method, 'DELETE')
 })
 
+test('Task goal dropdown loads every Goal page and keeps the authentication header', async (t) => {
+  setToken('session-token')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    const page = Number(new URL(url).searchParams.get('page'))
+    return Response.json({ success: true, data: [{ _id: 'goal-' + page, title: 'Goal ' + page }], pagination: { page, limit: 100, total: 101, totalPages: 2 } })
+  })
+  const goals = await goalApi.listAllGoals()
+  assert.deepEqual(goals.map((goal) => goal._id), ['goal-1', 'goal-2'])
+  assert.equal(calls.length, 2)
+  assert.equal(new URL(calls[1].url).searchParams.get('page'), '2')
+  assert.equal(new URL(calls[1].url).searchParams.get('limit'), '100')
+  assert.equal(calls[1].headers.Authorization, 'Bearer session-token')
+})
+
+test('empty Goal lists stay empty and failed loading never falls back to sample Goals', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ success: true, data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } }))
+  assert.deepEqual(await goalApi.listAllGoals(), [])
+  t.mock.method(globalThis, 'fetch', async () => { throw new TypeError('offline') })
+  await assert.rejects(goalApi.listAllGoals(), { code: 'NETWORK_ERROR' })
+})
+
 test('login/register use public requests and save tokens; me and logout use local session', async (t) => {
   setToken('old-token')
   t.mock.method(globalThis, 'fetch', async (url, options) => {
