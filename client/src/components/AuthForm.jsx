@@ -1,10 +1,12 @@
 /**
  * Controlled form shared by Login and Register through the mode prop.
- * Validates input and displays preview feedback; no API, token or account is created.
+ * Validates input, submits credentials to the API and displays server errors.
  */
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import FormField from './FormField.jsx'
 import validateAuth from '../utils/validateAuth.js'
+import useAuth from '../auth/useAuth.js'
 
 export default function AuthForm({ mode }) {
   const isRegister = mode === 'register'
@@ -13,6 +15,10 @@ export default function AuthForm({ mode }) {
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [notice, setNotice] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { login, register } = useAuth()
 
   // Update only the changed field, and remove that field's old error.
   function handleChange(event) {
@@ -27,7 +33,7 @@ export default function AuthForm({ mode }) {
   }
 
   // Prevent a full-page form submission, validate, then focus the first invalid input.
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const nextErrors = validateAuth(values, {
       isRegister,
@@ -42,14 +48,19 @@ export default function AuthForm({ mode }) {
       return
     }
 
-    // Backend integration point: replace preview feedback with the Auth service in step 6.
-    // Successful client validation alone does not prove a password or account is valid.
-    setNotice(isRegister
-      ? 'This is a preview. Your account has not been created.'
-      : 'This is a preview. Sign-in is not available yet.')
-    // Remove the entered password from form state after a valid preview submission.
-    setValues((current) => ({ ...current, password: '' }))
-    setShowPassword(false)
+    setSubmitting(true)
+    try {
+      const action = isRegister ? register : login
+      await action(isRegister
+        ? { name: values.name.trim(), email: values.email.trim(), password: values.password }
+        : { email: values.email.trim(), password: values.password })
+      setValues((current) => ({ ...current, password: '' }))
+      setShowPassword(false)
+      navigate(location.state?.from?.pathname || '/dashboard', { replace: true })
+    } catch (error) {
+      if (error.field && ['name', 'email', 'password'].includes(error.field)) setErrors({ [error.field]: error.message })
+      else setNotice(error.message)
+    } finally { setSubmitting(false) }
   }
 
   // noValidate disables browser popups so FormField can show consistent inline errors.
@@ -75,8 +86,8 @@ export default function AuthForm({ mode }) {
         </FormField>
       </div>
 
-      <button type="submit" className="mt-7 min-h-11 w-full cursor-pointer rounded-lg border border-os-primary bg-os-primary px-4 py-3 font-medium text-white transition-colors hover:bg-os-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary">
-        {isRegister ? 'Sign up' : 'Sign in'}
+      <button type="submit" disabled={submitting} className="mt-7 min-h-11 w-full cursor-pointer rounded-lg border border-os-primary bg-os-primary px-4 py-3 font-medium text-white transition-colors hover:bg-os-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary disabled:opacity-60">
+        {submitting ? 'Please wait…' : isRegister ? 'Sign up' : 'Sign in'}
       </button>
       {notice && <p role="status" className="mt-5 border-l-2 border-os-ink bg-os-soft px-4 py-3 text-sm">{notice}</p>}
     </form>

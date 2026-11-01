@@ -16,8 +16,8 @@ export function localDateTime(value) {
 
 // Read the Vietnam calendar day from a UTC instant, not just its first ten characters.
 export const dateOnly = (value) => localDateTime(value).slice(0, 10)
-// A date-only deadline remains valid until the last millisecond of that Vietnam day.
-export const dateToISO = (value) => value ? new Date(`${value}T23:59:59.999+07:00`).toISOString() : null
+// Send the selected local calendar date's final millisecond as a UTC instant.
+export const dateToISO = (value) => value ? new Date(`${value}T23:59:59.999`).toISOString() : null
 // Interpret form input as Vietnam time and normalize storage/export to UTC ISO.
 export const timeToISO = (value) => value ? new Date(`${value}:00+07:00`).toISOString() : null
 // Human-readable labels are display values, not values written back to records.

@@ -17,7 +17,6 @@ export default function LoginPage() {
           Sign up
         </Link>
       </p>
-      <p className="mt-5 text-center text-xs text-os-muted">Preview only · No account needed</p>
     </>
   )
 }

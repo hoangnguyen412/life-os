@@ -3,14 +3,17 @@
  * Sign out currently returns to Login only; there is no real session to revoke.
  */
 import { useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router'
+import { NavLink, useNavigate } from 'react-router'
 import Brand from './Brand.jsx'
 import Icon from './Icon.jsx'
 import workspaceNavigation from '../utils/workspaceNavigation.js'
+import useAuth from '../auth/useAuth.js'
 
 export default function Sidebar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef(null)
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
 
   // Preserve modifier-click behavior (for example, opening a link in another tab).
   function closeMenu(event) {
@@ -52,14 +55,14 @@ export default function Sidebar() {
           <div className="mb-4 flex items-center gap-3 px-3">
             <span aria-hidden="true" className="flex size-9 items-center justify-center rounded-full bg-os-soft font-medium text-os-primary">D</span>
             <div>
-              <p className="font-medium">Demo workspace</p>
-              <p className="text-xs text-os-muted">Preview session</p>
+              <p className="font-medium">{user?.name}</p>
+              <p className="text-xs text-os-muted">{user?.email}</p>
             </div>
           </div>
-          <Link to="/login" replace className="flex min-h-11 w-full items-center gap-3 rounded-lg px-4 py-3 text-os-muted hover:bg-os-soft hover:text-os-ink">
+          <button onClick={() => { logout(); navigate('/login', { replace: true }) }} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-4 py-3 text-os-muted hover:bg-os-soft hover:text-os-ink">
             <Icon name="logout" />
             Sign out
-          </Link>
+          </button>
         </div>
       </div>
     </aside>

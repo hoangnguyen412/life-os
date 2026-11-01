@@ -1,7 +1,6 @@
 /**
- * Pure preview business rules: overdue checks, metrics, sorting and record mutations.
- * Functions return new objects/arrays so React can detect changes to shared state.
- * These simulate the contract in the browser; the backend remains authoritative later.
+ * Pure fixture rules kept for regression tests; production pages use backend data.
+ * Functions return new objects/arrays so tests can check mutations without side effects.
  */
 import { createSampleData } from './sampleData.js'
 

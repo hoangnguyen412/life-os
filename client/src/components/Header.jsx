@@ -1,6 +1,6 @@
 /**
  * Workspace header receives the current page title from AppLayout.
- * The Preview badge describes the demo mode, not an authenticated user.
+ * The authenticated session is shown in the sidebar.
  */
 export default function Header({ title }) {
   return (
@@ -9,7 +9,6 @@ export default function Header({ title }) {
         <p className="text-[11px] tracking-wide text-os-muted">Your personal workspace</p>
         <p className="mt-1 text-base font-medium">{title}</p>
       </div>
-      <span className="rounded-full border border-os-line bg-os-canvas px-3 py-1 text-xs text-os-muted">Preview</span>
     </header>
   )
 }

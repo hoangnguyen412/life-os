@@ -17,7 +17,6 @@ export default function RegisterPage() {
           Sign in
         </Link>
       </p>
-      <p className="mt-5 text-center text-xs text-os-muted">Preview only · No account will be created</p>
     </>
   )
 }

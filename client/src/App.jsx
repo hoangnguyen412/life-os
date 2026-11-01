@@ -1,9 +1,9 @@
 /**
  * Route map for the whole application, including layouts and the 404 page.
- * Workspace routes are public previews until real authentication is connected.
+ * Workspace routes require a verified authenticated session.
  */
 import { useEffect } from 'react'
-import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router'
+import { matchPath, Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
@@ -14,6 +14,8 @@ import GoalsPage from './pages/GoalsPage.jsx'
 import CalendarPage from './pages/CalendarPage.jsx'
 import workspaceNavigation from './utils/workspaceNavigation.js'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import useAuth from './auth/useAuth.js'
+import AppDataProvider from './data/AppDataProvider.jsx'
 
 // Navigation IDs select page components without duplicating URL definitions.
 const workspacePages = { dashboard: DashboardPage, tasks: TasksPage, goals: GoalsPage, calendar: CalendarPage }
@@ -36,11 +38,13 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route element={<AuthLayout />}>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+      <Route element={<GuestOnly />}>
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+        </Route>
       </Route>
-      <Route element={<AppLayout />}>
+      <Route element={<ProtectedWorkspace />}>
         {workspaceNavigation.map((page) => {
           const Page = workspacePages[page.id]
           return <Route key={page.id} path={page.path} element={<Page />} />
@@ -49,4 +53,24 @@ export default function App() {
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
+}
+
+function GuestOnly() {
+  const { user, loading, sessionError, retrySession } = useAuth()
+  if (loading) return <div className="os-card m-8 py-16 text-center" role="status">Checking your session…</div>
+  if (sessionError) return <SessionError message={sessionError} retry={retrySession} />
+  return user ? <Navigate to="/dashboard" replace /> : <Outlet />
+}
+
+function ProtectedWorkspace() {
+  const { user, loading, sessionError, retrySession } = useAuth()
+  const location = useLocation()
+  if (loading) return <div className="os-card m-8 py-16 text-center" role="status">Checking your session…</div>
+  if (sessionError) return <SessionError message={sessionError} retry={retrySession} />
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />
+  return <AppDataProvider><AppLayout /></AppDataProvider>
+}
+
+function SessionError({ message, retry }) {
+  return <div className="os-card m-8 py-12 text-center" role="alert"><p>Could not verify your session: {message}</p><button className="os-button os-button-primary mt-4" onClick={() => retry().catch(() => {})}>Try again</button></div>
 }

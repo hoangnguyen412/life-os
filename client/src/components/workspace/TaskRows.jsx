@@ -3,15 +3,15 @@
  * Both layouts share the title, linked goal, due date, status and priority rules.
  * onView delegates opening details to the parent; this component does not mutate tasks.
  */
-import useMockData from '../../hooks/useMockData.js'
+import useAppData from '../../data/useAppData.js'
 import { formatDate } from '../../utils/dates.js'
-import { isOverdue } from '../../mocks/mockStore.js'
+import { isOverdue } from '../../utils/taskRules.js'
 
 // Keep backend status codes in data and translate them only for display.
 const STATUS_LABELS = { todo: 'To do', in_progress: 'In progress', done: 'Completed' }
 
 export default function TaskRows({ tasks, onView, layout = 'list' }) {
-  const { goals } = useMockData()
+  const { goals } = useAppData()
   const isGrid = layout === 'grid'
 
   // The Tasks region controls columns using its available width, including in narrow previews.

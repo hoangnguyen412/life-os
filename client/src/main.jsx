@@ -1,21 +1,20 @@
 /**
- * Application entry point: mount React in the HTML root element.
- * Router handles URLs; MockDataProvider shares preview data with every page.
+ * Application entry point: mount the router and shared authentication state.
  */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import App from './App.jsx'
 import './index.css'
-import MockDataProvider from './mocks/MockDataProvider.jsx'
+import AuthProvider from './auth/AuthProvider.jsx'
 
 // StrictMode runs extra development checks; it is not an authentication guard.
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <MockDataProvider>
+      <AuthProvider>
         <App />
-      </MockDataProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )
