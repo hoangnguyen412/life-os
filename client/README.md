@@ -64,13 +64,15 @@ Sidebar cũng dùng logo này. Hai PNG được tạo bằng công cụ imagegen
 giữ nguyên ảnh đã chọn và nền trong suốt của logo.
 
 Form yêu cầu tên khi đăng ký, email hợp lệ và mật khẩu. Đăng ký yêu cầu mật khẩu
-tối thiểu 8 ký tự theo `docs/API_CONTRACT.md`. Gửi form hợp lệ chỉ hiện thông báo
-preview và xóa mật khẩu khỏi form; không gọi API, tạo tài khoản hay lưu token.
+tối thiểu 8 ký tự theo `docs/API_CONTRACT.md`. Form hợp lệ gọi API thật: đăng ký
+tạo tài khoản, đăng nhập kiểm tra thông tin, thành công lưu JWT và mở workspace.
+Khi đang gửi, form bị khóa để tránh gửi trùng; lỗi backend hiện dưới ô nhập
+tương ứng hoặc dưới form nếu là lỗi chung.
 
 Bước 3 có `AppLayout`, `Sidebar`, `Header` và vùng nội dung dùng chung.
-Bấm **Preview workspace** ở Login/Register để xem khung ứng dụng; không cần
-đăng nhập hoặc tài khoản. Sidebar có Dashboard, Tasks, Goals, Calendar và
-Sign out (trở về Login). Trên điện thoại, nút menu mở/đóng phần điều hướng.
+Đăng nhập để mở khung ứng dụng. Sidebar có Dashboard, Tasks, Goals, Calendar và
+Sign out (xóa token và trở về Login). Header/Sidebar hiện tên và email của user
+đã xác thực. Trên điện thoại, nút menu mở/đóng phần điều hướng.
 Nội dung mỗi mục đã dùng dữ liệu mẫu ở bước 5.
 
 Bảng màu chung được tập trung ở `@theme` trong `src/index.css`:
@@ -102,9 +104,9 @@ Tiêu đề tab trình duyệt thay đổi theo trang.
 | `/calendar` | Calendar |
 | Đường dẫn khác | Page not found |
 
-Bốn trang ứng dụng hiện là preview public, chưa yêu cầu tài khoản hoặc JWT.
-Sign out chỉ trở về Login ở giai đoạn này. Bước 6 sẽ thêm Auth thật và bảo vệ
-các route. Chưa deploy.
+Bốn trang ứng dụng đã được bảo vệ bởi `RequireAuth`. Chưa đăng nhập thì về Login;
+sau khi đăng nhập quay lại trang đã yêu cầu. Link xem workspace không cần tài khoản
+đã được bỏ. Task/Goal/Calendar/Dashboard vẫn dùng dữ liệu mẫu trong workspace.
 
 ## Mock data ở bước 5
 
@@ -132,8 +134,9 @@ Quy tắc xuất theo [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html);
 
 Mở **Preview controls** phía trên nội dung để thử Loading/Error, **Empty data**
 hoặc **Reset sample data**. Error có nút Try again. Thay đổi chỉ ở bộ nhớ,
-refresh sẽ khôi phục dữ liệu; không gọi API, dùng localStorage hay ghi database.
-Auth form vẫn là preview như bước 2. Dữ liệu mẫu chưa kết nối backend.
+refresh sẽ khôi phục dữ liệu mẫu; dữ liệu này chưa gọi API hay ghi database.
+Auth đã gọi backend thật và lưu JWT trong localStorage. Dữ liệu mock được khởi
+tạo lại khi đăng xuất/đăng nhập để không giữ thay đổi mẫu của phiên trước.
 
 `npm test` kiểm tra tiến độ Goal, completedAt, gỡ liên kết khi xóa Goal, số liệu
 Dashboard, sắp xếp và chuyển ngày giờ UTC+07:00.
@@ -168,9 +171,21 @@ token tương ứng và về Login; đăng nhập sai chỉ trả lỗi để fo
 Lỗi mạng và response không hợp lệ có mã `NETWORK_ERROR` và `INVALID_RESPONSE`.
 Ngày giờ truyền vào service phải là UTC ISO; các trường chỉ đọc không được gửi.
 
-Các service đã sẵn sàng nhưng chưa nối vào form/trang. Giao diện vẫn dùng mock
-data; chưa có Auth guard. Test service dùng fetch/storage giả, không gọi backend
-hoặc ghi dữ liệu lên MongoDB Atlas.
+Auth đã nối vào form và có route guard. `AuthProvider` gọi `/auth/me` khi refresh
+để xác minh JWT trước khi mở workspace. Nếu server tạm mất kết nối, trang xác minh
+có Try again hoặc Back to sign in; không mở nội dung được bảo vệ khi chưa xác minh.
+`AuthProvider` dùng `useState` giữ user/trạng thái và `useEffect` kiểm tra phiên
+khi mở ứng dụng. Form gọi `login` hoặc `register`; Sidebar gọi `logout`.
+`RequireAuth` đọc trạng thái này để mở trang hoặc chuyển về Login.
+Không có store quản lý phiên riêng hoặc đồng bộ đăng xuất giữa nhiều tab.
+
+Để kiểm thử thật, backend phải chạy tại URL trong `.env`, kết nối MongoDB và cho
+phép CORS từ địa chỉ frontend. Frontend không cần MongoDB URI hoặc JWT secret.
+Các trang dữ liệu chưa nối Task/Goal API; chúng vẫn dùng mock data.
+
+Test service dùng fetch/storage giả, không gọi backend hoặc ghi Atlas.
+Các test kiểm tra payload đăng nhập/đăng ký, lưu/xóa JWT, lấy user, xử lý 401,
+lỗi API và validation cơ bản. Cần chạy frontend/backend để kiểm thử thao tác thật.
 
 ## Chuẩn bị cho Vercel
 

@@ -6,6 +6,8 @@ import { getToken, setToken } from './authToken.js'
 import * as authApi from './authApi.js'
 import * as taskApi from './taskApi.js'
 import * as goalApi from './goalApi.js'
+import { authRedirect } from '../utils/authRedirect.js'
+import validateAuth from '../utils/validateAuth.js'
 
 let calls
 let redirects
@@ -103,7 +105,7 @@ test('login/register use public requests and save tokens; me and logout use loca
   setToken('old-token')
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls.push({ url, ...options })
-    return Response.json({ success: true, data: { token: 'new-token', user: { _id: 'user-id' } } })
+    return Response.json({ success: true, data: url.endsWith('/auth/me') ? { _id: 'user-id' } : { token: 'new-token', user: { _id: 'user-id' } } })
   })
   await authApi.login({ email: 'user@example.com', password: 'password', userId: 'ignored' })
   assert.equal(calls[0].headers.Authorization, undefined)
@@ -171,4 +173,27 @@ test('network, malformed JSON/envelopes and cancellation have distinct outcomes'
 test('malformed login success never stores a missing token', async () => {
   await assert.rejects(authApi.login({ email: 'user@example.com', password: 'password' }), { code: 'INVALID_RESPONSE' })
   assert.equal(getToken(), null)
+})
+
+test('Auth rejects missing user details instead of accepting an incomplete session', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ success: true, data: {} }))
+  await assert.rejects(authApi.getCurrentUser(), { code: 'INVALID_RESPONSE' })
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ success: true, data: { token: 'token-without-user' } }))
+  await assert.rejects(authApi.login({ email: 'user@example.com', password: 'password' }), { code: 'INVALID_RESPONSE' })
+  assert.equal(getToken(), null)
+})
+
+test('post-login redirects accept workspace routes and reject external or Auth pages', () => {
+  assert.equal(authRedirect('/tasks?goalId=abc#list'), '/tasks?goalId=abc#list')
+  for (const path of [undefined, '//example.com', 'https://example.com', '/login', '/register']) {
+    assert.equal(authRedirect(path), '/dashboard')
+  }
+})
+
+test('Auth input validation rejects blank fields and short registration passwords', () => {
+  assert.deepEqual(validateAuth({ name: ' ', email: '', password: '' }, { isRegister: true, emailValid: false }), {
+    name: 'Name is required.', email: 'Email is required.', password: 'Password is required.',
+  })
+  assert.equal(validateAuth({ name: 'User', email: 'user@example.com', password: 'short' }, { isRegister: true, emailValid: true }).password, 'Use at least 8 characters.')
+  assert.deepEqual(validateAuth({ name: '', email: 'user@example.com', password: 'password' }, { isRegister: false, emailValid: true }), {})
 })

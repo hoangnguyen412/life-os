@@ -1,14 +1,16 @@
 /**
  * Workspace navigation: shared logo, active route links and a collapsible mobile menu.
- * Sign out currently returns to Login only; there is no real session to revoke.
+ * Sign out clears the local JWT/session; the route guard then returns to Login.
  */
 import { useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router'
+import { NavLink } from 'react-router'
 import Brand from './Brand.jsx'
 import Icon from './Icon.jsx'
 import workspaceNavigation from '../utils/workspaceNavigation.js'
+import useAuth from '../hooks/useAuth.js'
 
 export default function Sidebar() {
+  const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef(null)
 
@@ -50,16 +52,16 @@ export default function Sidebar() {
 
         <div className="mt-8 border-t border-os-line pt-5 md:mt-auto">
           <div className="mb-4 flex items-center gap-3 px-3">
-            <span aria-hidden="true" className="flex size-9 items-center justify-center rounded-full bg-os-soft font-medium text-os-primary">D</span>
-            <div>
-              <p className="font-medium">Demo workspace</p>
-              <p className="text-xs text-os-muted">Preview session</p>
+            <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-os-soft font-medium text-os-primary">{(user?.name || user?.email || 'U').slice(0, 1).toUpperCase()}</span>
+            <div className="min-w-0">
+              <p className="truncate font-medium" title={user?.name}>{user?.name || 'Your account'}</p>
+              <p className="truncate text-xs text-os-muted" title={user?.email}>{user?.email}</p>
             </div>
           </div>
-          <Link to="/login" replace className="flex min-h-11 w-full items-center gap-3 rounded-lg px-4 py-3 text-os-muted hover:bg-os-soft hover:text-os-ink">
+          <button type="button" onClick={logout} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-4 py-3 text-os-muted hover:bg-os-soft hover:text-os-ink">
             <Icon name="logout" />
             Sign out
-          </Link>
+          </button>
         </div>
       </div>
     </aside>

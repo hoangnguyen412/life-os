@@ -1,6 +1,6 @@
 /**
  * Route map for the whole application, including layouts and the 404 page.
- * Workspace routes are public previews until real authentication is connected.
+ * Auth gates workspace routes; Task/Goal/Calendar data still use the mock provider.
  */
 import { useEffect } from 'react'
 import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router'
@@ -14,6 +14,8 @@ import GoalsPage from './pages/GoalsPage.jsx'
 import CalendarPage from './pages/CalendarPage.jsx'
 import workspaceNavigation from './utils/workspaceNavigation.js'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import RequireAuth from './auth/RequireAuth.jsx'
+import MockDataProvider from './mocks/MockDataProvider.jsx'
 
 // Navigation IDs select page components without duplicating URL definitions.
 const workspacePages = { dashboard: DashboardPage, tasks: TasksPage, goals: GoalsPage, calendar: CalendarPage }
@@ -40,11 +42,14 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
-      <Route element={<AppLayout />}>
-        {workspaceNavigation.map((page) => {
-          const Page = workspacePages[page.id]
-          return <Route key={page.id} path={page.path} element={<Page />} />
-        })}
+      <Route element={<RequireAuth />}>
+        {/* Unmount mock records on logout so another account starts a fresh workspace. */}
+        <Route element={<MockDataProvider><AppLayout /></MockDataProvider>}>
+          {workspaceNavigation.map((page) => {
+            const Page = workspacePages[page.id]
+            return <Route key={page.id} path={page.path} element={<Page />} />
+          })}
+        </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

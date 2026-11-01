@@ -1,18 +1,21 @@
 /**
  * Controlled form shared by Login and Register through the mode prop.
- * Validates input and displays preview feedback; no API, token or account is created.
+ * Validates input, submits to the real Auth API and maps server errors to fields.
  */
 import { useState } from 'react'
 import FormField from './FormField.jsx'
 import validateAuth from '../utils/validateAuth.js'
+import useAuth from '../hooks/useAuth.js'
 
 export default function AuthForm({ mode }) {
   const isRegister = mode === 'register'
+  const auth = useAuth()
   // State holds field values, validation errors, password visibility and submit feedback.
   const [values, setValues] = useState({ name: '', email: '', password: '' })
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [notice, setNotice] = useState('')
+  const [pending, setPending] = useState(false)
 
   // Update only the changed field, and remove that field's old error.
   function handleChange(event) {
@@ -27,36 +30,51 @@ export default function AuthForm({ mode }) {
   }
 
   // Prevent a full-page form submission, validate, then focus the first invalid input.
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
+    if (pending) return
+    const form = event.currentTarget
     const nextErrors = validateAuth(values, {
       isRegister,
-      emailValid: event.currentTarget.elements.namedItem('email').validity.valid,
+      emailValid: form.elements.namedItem('email').validity.valid,
     })
     setErrors(nextErrors)
     setNotice('')
 
     const firstInvalidField = Object.keys(nextErrors)[0]
     if (firstInvalidField) {
-      event.currentTarget.elements.namedItem(firstInvalidField).focus()
+      form.elements.namedItem(firstInvalidField).focus()
       return
     }
 
-    // Backend integration point: replace preview feedback with the Auth service in step 6.
-    // Successful client validation alone does not prove a password or account is valid.
-    setNotice(isRegister
-      ? 'This is a preview. Your account has not been created.'
-      : 'This is a preview. Sign-in is not available yet.')
-    // Remove the entered password from form state after a valid preview submission.
-    setValues((current) => ({ ...current, password: '' }))
+    setPending(true)
     setShowPassword(false)
+    try {
+      const credentials = { email: values.email.trim(), password: values.password }
+      if (isRegister) {
+        await auth.register({ ...credentials, name: values.name.trim() })
+      } else {
+        await auth.login(credentials)
+      }
+      // AuthLayout redirects only after the API confirms an authenticated user.
+      setValues((current) => ({ ...current, password: '' }))
+    } catch (error) {
+      const field = ['email', 'password', ...(isRegister ? ['name'] : [])].includes(error.field) ? error.field : null
+      if (field) {
+        setErrors({ [field]: error.message })
+      } else {
+        setNotice(error.message || 'Could not sign in. Please try again.')
+      }
+    } finally {
+      setPending(false)
+    }
   }
 
   // noValidate disables browser popups so FormField can show consistent inline errors.
   // The visibility button uses type="button" to avoid accidentally submitting the form.
   return (
-    <form noValidate onSubmit={handleSubmit}>
-      <div className="space-y-5.5">
+    <form noValidate onSubmit={handleSubmit} aria-busy={pending}>
+      <fieldset disabled={pending} className="min-w-0 space-y-5.5">
         {isRegister && (
           <FormField name="name" label="Name" type="text" autoComplete="name" autoFocus value={values.name} onChange={handleChange} error={errors.name} />
         )}
@@ -73,12 +91,13 @@ export default function AuthForm({ mode }) {
             {showPassword ? 'Hide' : 'Show'}
           </button>
         </FormField>
-      </div>
+      </fieldset>
 
-      <button type="submit" className="mt-7 min-h-11 w-full cursor-pointer rounded-lg border border-os-primary bg-os-primary px-4 py-3 font-medium text-white transition-colors hover:bg-os-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary">
-        {isRegister ? 'Sign up' : 'Sign in'}
+      <button type="submit" disabled={pending} className="mt-7 min-h-11 w-full cursor-pointer rounded-lg border border-os-primary bg-os-primary px-4 py-3 font-medium text-white transition-colors hover:bg-os-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary disabled:cursor-wait disabled:opacity-60">
+        {pending ? (isRegister ? 'Creating account…' : 'Signing in…') : isRegister ? 'Sign up' : 'Sign in'}
       </button>
-      {notice && <p role="status" className="mt-5 border-l-2 border-os-ink bg-os-soft px-4 py-3 text-sm">{notice}</p>}
+      {pending && <p role="status" className="mt-4 text-sm text-os-muted">Please wait…</p>}
+      {notice && <p role="alert" className="mt-5 border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700">{notice}</p>}
     </form>
   )
 }
