@@ -30,7 +30,7 @@ export default function AppLayout() {
       <div className="min-w-0">
         <Header title={page?.label ?? 'Life OS'} />
         <main ref={content} id="workspace-content" tabIndex={-1} className="px-6 py-8 outline-none sm:px-8 lg:px-12 lg:py-10">
-          {!['tasks', 'goals'].includes(page?.id) && <PreviewToolbar />}
+          {page?.id === 'calendar' && <PreviewToolbar />}
           <Outlet />
         </main>
       </div>

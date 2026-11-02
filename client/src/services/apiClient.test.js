@@ -6,6 +6,7 @@ import { getToken, setToken } from './authToken.js'
 import * as authApi from './authApi.js'
 import * as taskApi from './taskApi.js'
 import * as goalApi from './goalApi.js'
+import { getDashboardSummary } from './dashboardApi.js'
 import { authRedirect } from '../utils/authRedirect.js'
 import validateAuth from '../utils/validateAuth.js'
 
@@ -190,6 +191,20 @@ test('network, malformed JSON/envelopes and cancellation have distinct outcomes'
   const aborted = new DOMException('Cancelled', 'AbortError')
   t.mock.method(globalThis, 'fetch', async () => { throw aborted })
   await assert.rejects(apiRequest('/tasks'), (error) => error === aborted)
+})
+
+test('Dashboard summary uses its protected endpoint and preserves backend metrics', async (t) => {
+  const summary = { totalTasks: 6, completedTasks: 2, overdueTasks: 2, avgGoalProgress: 50 }
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    return Response.json({ success: true, data: summary })
+  })
+  setToken('dashboard-token')
+  const controller = new AbortController()
+  assert.deepEqual((await getDashboardSummary({ signal: controller.signal })).data, summary)
+  assert.equal(calls[0].url, `${API_URL}/dashboard/summary`)
+  assert.equal(calls[0].headers.Authorization, 'Bearer dashboard-token')
+  assert.equal(calls[0].signal, controller.signal)
 })
 
 test('malformed login success never stores a missing token', async () => {
