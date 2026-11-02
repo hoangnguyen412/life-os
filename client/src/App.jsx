@@ -1,6 +1,6 @@
 /**
  * Route map for the whole application, including layouts and the 404 page.
- * Auth gates workspace routes; Task/Goal/Calendar data still use the mock provider.
+ * Auth gates workspace routes; Dashboard and Calendar still use the mock provider.
  */
 import { useEffect } from 'react'
 import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router'
