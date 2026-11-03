@@ -1,6 +1,6 @@
 /**
  * Route map for the whole application, including layouts and the 404 page.
- * Auth gates workspace routes; only Calendar still uses the mock provider.
+ * Auth gates workspace routes.
  */
 import { useEffect } from 'react'
 import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router'
@@ -15,7 +15,6 @@ import CalendarPage from './pages/CalendarPage.jsx'
 import workspaceNavigation from './utils/workspaceNavigation.js'
 import NotFoundPage from './pages/NotFoundPage.jsx'
 import RequireAuth from './auth/RequireAuth.jsx'
-import MockDataProvider from './mocks/MockDataProvider.jsx'
 
 // Navigation IDs select page components without duplicating URL definitions.
 const workspacePages = { dashboard: DashboardPage, tasks: TasksPage, goals: GoalsPage, calendar: CalendarPage }
@@ -43,8 +42,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
       </Route>
       <Route element={<RequireAuth />}>
-        {/* Unmount mock records on logout so another account starts a fresh workspace. */}
-        <Route element={<MockDataProvider><AppLayout /></MockDataProvider>}>
+        <Route element={<AppLayout />}>
           {workspaceNavigation.map((page) => {
             const Page = workspacePages[page.id]
             return <Route key={page.id} path={page.path} element={<Page />} />

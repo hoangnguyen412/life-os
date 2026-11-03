@@ -73,7 +73,7 @@ Bước 3 có `AppLayout`, `Sidebar`, `Header` và vùng nội dung dùng chung.
 Đăng nhập để mở khung ứng dụng. Sidebar có Dashboard, Tasks, Goals, Calendar và
 Sign out (xóa token và trở về Login). Header/Sidebar hiện tên và email của user
 đã xác thực. Trên điện thoại, nút menu mở/đóng phần điều hướng.
-Tasks, Goals và Dashboard dùng dữ liệu backend thật; Calendar vẫn dùng dữ liệu mẫu.
+Tasks, Goals, Dashboard và Calendar dùng API thật.
 
 Bảng màu chung được tập trung ở `@theme` trong `src/index.css`:
 
@@ -106,37 +106,21 @@ Tiêu đề tab trình duyệt thay đổi theo trang.
 
 Bốn trang ứng dụng đã được bảo vệ bởi `RequireAuth`. Chưa đăng nhập thì về Login;
 sau khi đăng nhập quay lại trang đã yêu cầu. Link xem workspace không cần tài khoản
-đã được bỏ. Trang Tasks, Goals và Dashboard đã dùng API thật; Calendar vẫn dùng dữ liệu mẫu.
+đã được bỏ. Tasks, Goals, Dashboard và Calendar dùng API thật.
 
-## Mock data ở bước 5
+## Calendar dùng API thật
 
-`src/mocks/sampleData.js` tạo 5 Tasks, 2 Goals và 3 CalendarEvents từ nội dung
-wireframe. Ngày được đặt tương đối theo ngày hiện tại ở Việt Nam, dùng UTC ISO
-để lưu trong bộ nhớ. ID và field dùng contract hiện tại (`_id`, `goalId`,
-`manualProgress`...), không dùng ID số trong bản wireframe cũ.
+Calendar tải sự kiện giao với tháng đang xem từ `/events` và đọc deadline từ Task.
+Bấm một ngày để tạo sự kiện. Bấm mục trên lịch để xem hoặc sửa bản ghi gốc.
+Sự kiện dùng giờ Việt Nam trên giao diện và lưu UTC qua API.
+Deadline của Task xuất hiện dưới dạng cả ngày theo giờ Việt Nam.
 
-`MockDataProvider` còn dùng cho Calendar.
-Calendar có
-lịch tháng và danh sách sự kiện. Có form tạo/sửa, xem chi tiết và xác nhận xóa.
-Thay đổi Task cập nhật Goal task-based; xóa Goal giữ Task và gỡ liên kết.
-Calendar hiển thị CalendarEvents có giờ và Task có dueDate dưới dạng cả ngày.
-Task mẫu được lấy từ mock store: đổi deadline mẫu sẽ chuyển ngày trên lịch;
-gỡ deadline hoặc xóa Task sẽ gỡ mục đó, không tạo CalendarEvent trùng lặp.
-Task màu vàng, quá hạn màu đỏ, hoàn thành màu xám; sự kiện màu xanh teal.
-Bấm mục trên lịch để xem/sửa Task hoặc sự kiện gốc.
-
-Nút **Download .ics** xuất tháng đang xem hoặc toàn bộ lịch, gồm cả sự kiện và
+Nút **Download .ics** xuất toàn bộ lịch, gồm cả sự kiện và
 deadline Task. File dùng UTF-8, giờ sự kiện UTC, deadline dùng ngày cả ngày theo
 Việt Nam. Trên Google Calendar ở máy tính, mở Settings → Import & export để
 nhập file. Đây là bản xuất tại thời điểm tải, không tự đồng bộ các thay đổi sau đó.
 Quy tắc xuất theo [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html);
 [hướng dẫn nhập Google Calendar](https://support.google.com/calendar/answer/37118).
-
-Ở Calendar, mở **Preview controls** để thử Loading/Error, **Empty data**
-hoặc **Reset sample data**. Error có nút Try again. Thay đổi chỉ ở bộ nhớ,
-refresh sẽ khôi phục dữ liệu mẫu; dữ liệu này chưa gọi API hay ghi database.
-Auth đã gọi backend thật và lưu JWT trong localStorage. Dữ liệu mock được khởi
-tạo lại khi đăng xuất/đăng nhập để không giữ thay đổi mẫu của phiên trước.
 
 `npm test` kiểm tra tiến độ Goal, completedAt, gỡ liên kết khi xóa Goal, số liệu
 Dashboard, sắp xếp và chuyển ngày giờ UTC+07:00.
@@ -181,7 +165,7 @@ Không có store quản lý phiên riêng hoặc đồng bộ đăng xuất gi�
 
 Để kiểm thử thật, backend phải chạy tại URL trong `.env`, kết nối MongoDB và cho
 phép CORS từ địa chỉ frontend. Frontend không cần MongoDB URI hoặc JWT secret.
-Trang Tasks, Goals và Dashboard đã nối API thật; Calendar vẫn dùng dữ liệu mẫu.
+Tasks, Goals, Dashboard và Calendar dùng API thật.
 
 Test service dùng fetch/storage giả, không gọi backend hoặc ghi Atlas.
 Các test kiểm tra payload đăng nhập/đăng ký, lưu/xóa JWT, lấy user, xử lý 401,
@@ -204,7 +188,6 @@ Goal vừa tạo ở trang Goals sẽ có trong form Task khi mở trang Tasks. 
 tạo Task với `goalId: null`. Ngày Task dùng cuối ngày theo múi giờ trình duyệt,
 chuyển sang UTC ISO; xóa ngày hoặc Goal trong form gửi `null`.
 
-Calendar vẫn là dữ liệu mẫu, nên chưa phản ánh Task thật vừa lưu.
 Tiến độ Goal liên quan do backend cập nhật; frontend không tự tính tiến độ thật.
 
 Bộ lọc overdue ở backend đã chấp nhận cả boolean và chuỗi true/false, nên request từ Express 5 được lọc đúng.
