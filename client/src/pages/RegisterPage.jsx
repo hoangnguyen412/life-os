@@ -1,11 +1,12 @@
 /**
  * Registration page: reuse AuthForm with mode="register" to request a name
- * and apply registration validation. This preview does not create an account.
+ * and apply registration validation before creating a real backend account.
  */
 import AuthForm from '../components/AuthForm.jsx'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 
 export default function RegisterPage() {
+  const { state } = useLocation()
   return (
     <>
       <h1 id="auth-title" className="mb-2.5 text-[28px] font-medium leading-tight">Create an account</h1>
@@ -13,11 +14,10 @@ export default function RegisterPage() {
       <AuthForm mode="register" />
       <p className="mt-6.5 text-center">
         Already have an account?{' '}
-        <Link to="/login" className="inline-flex min-h-11 items-center rounded-[3px] px-2 underline underline-offset-4 hover:text-os-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-ink">
+        <Link to="/login" state={state} className="inline-flex min-h-11 items-center rounded-[3px] px-2 underline underline-offset-4 hover:text-os-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-ink">
           Sign in
         </Link>
       </p>
-      <p className="mt-5 text-center text-xs text-os-muted">Preview only · No account will be created</p>
     </>
   )
 }

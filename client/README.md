@@ -64,14 +64,16 @@ Sidebar cũng dùng logo này. Hai PNG được tạo bằng công cụ imagegen
 giữ nguyên ảnh đã chọn và nền trong suốt của logo.
 
 Form yêu cầu tên khi đăng ký, email hợp lệ và mật khẩu. Đăng ký yêu cầu mật khẩu
-tối thiểu 8 ký tự theo `docs/API_CONTRACT.md`. Gửi form hợp lệ chỉ hiện thông báo
-preview và xóa mật khẩu khỏi form; không gọi API, tạo tài khoản hay lưu token.
+tối thiểu 8 ký tự theo `docs/API_CONTRACT.md`. Form hợp lệ gọi API thật: đăng ký
+tạo tài khoản, đăng nhập kiểm tra thông tin, thành công lưu JWT và mở workspace.
+Khi đang gửi, form bị khóa để tránh gửi trùng; lỗi backend hiện dưới ô nhập
+tương ứng hoặc dưới form nếu là lỗi chung.
 
 Bước 3 có `AppLayout`, `Sidebar`, `Header` và vùng nội dung dùng chung.
-Bấm **Preview workspace** ở Login/Register để xem khung ứng dụng; không cần
-đăng nhập hoặc tài khoản. Sidebar có Dashboard, Tasks, Goals, Calendar và
-Sign out (trở về Login). Trên điện thoại, nút menu mở/đóng phần điều hướng.
-Nội dung mỗi mục đã dùng dữ liệu mẫu ở bước 5.
+Đăng nhập để mở khung ứng dụng. Sidebar có Dashboard, Tasks, Goals, Calendar và
+Sign out (xóa token và trở về Login). Header/Sidebar hiện tên và email của user
+đã xác thực. Trên điện thoại, nút menu mở/đóng phần điều hướng.
+Tasks, Goals, Dashboard và Calendar dùng API thật.
 
 Bảng màu chung được tập trung ở `@theme` trong `src/index.css`:
 
@@ -102,43 +104,120 @@ Tiêu đề tab trình duyệt thay đổi theo trang.
 | `/calendar` | Calendar |
 | Đường dẫn khác | Page not found |
 
-Bốn trang ứng dụng hiện là preview public, chưa yêu cầu tài khoản hoặc JWT.
-Sign out chỉ trở về Login ở giai đoạn này. Bước 6 sẽ thêm Auth thật và bảo vệ
-các route. Chưa deploy.
+Bốn trang ứng dụng đã được bảo vệ bởi `RequireAuth`. Chưa đăng nhập thì về Login;
+sau khi đăng nhập quay lại trang đã yêu cầu. Link xem workspace không cần tài khoản
+đã được bỏ. Tasks, Goals, Dashboard và Calendar dùng API thật.
 
-## Mock data ở bước 5
+## Calendar dùng API thật
 
-`src/mocks/sampleData.js` tạo 5 Tasks, 2 Goals và 3 CalendarEvents từ nội dung
-wireframe. Ngày được đặt tương đối theo ngày hiện tại ở Việt Nam, dùng UTC ISO
-để lưu trong bộ nhớ. ID và field dùng contract hiện tại (`_id`, `goalId`,
-`manualProgress`...), không dùng ID số trong bản wireframe cũ.
+Calendar tải sự kiện giao với tháng đang xem từ `/events` và đọc deadline từ Task.
+Bấm một ngày để tạo sự kiện. Bấm mục trên lịch để xem hoặc sửa bản ghi gốc.
+Sự kiện dùng giờ Việt Nam trên giao diện và lưu UTC qua API.
+Deadline của Task xuất hiện dưới dạng cả ngày theo giờ Việt Nam.
 
-`MockDataProvider` chia sẻ dữ liệu giữa bốn trang. Dashboard có 4 số liệu, Tasks
-có bộ lọc/sắp xếp/phân trang (8 items/trang, 4 card mỗi cột trên desktop), Goals có progress bar, Calendar có
-lịch tháng và danh sách sự kiện. Có form tạo/sửa, xem chi tiết và xác nhận xóa.
-Thay đổi Task cập nhật Goal task-based; xóa Goal giữ Task và gỡ liên kết.
-Calendar hiển thị CalendarEvents có giờ và Task có dueDate dưới dạng cả ngày.
-Task được lấy trực tiếp từ dữ liệu Tasks: đổi deadline sẽ chuyển ngày trên lịch;
-gỡ deadline hoặc xóa Task sẽ gỡ mục đó, không tạo CalendarEvent trùng lặp.
-Task màu vàng, quá hạn màu đỏ, hoàn thành màu xám; sự kiện màu xanh teal.
-Bấm mục trên lịch để xem/sửa Task hoặc sự kiện gốc.
-
-Nút **Download .ics** xuất tháng đang xem hoặc toàn bộ lịch, gồm cả sự kiện và
+Nút **Download .ics** xuất toàn bộ lịch, gồm cả sự kiện và
 deadline Task. File dùng UTF-8, giờ sự kiện UTC, deadline dùng ngày cả ngày theo
 Việt Nam. Trên Google Calendar ở máy tính, mở Settings → Import & export để
 nhập file. Đây là bản xuất tại thời điểm tải, không tự đồng bộ các thay đổi sau đó.
 Quy tắc xuất theo [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html);
 [hướng dẫn nhập Google Calendar](https://support.google.com/calendar/answer/37118).
 
-Mở **Preview controls** phía trên nội dung để thử Loading/Error, **Empty data**
-hoặc **Reset sample data**. Error có nút Try again. Thay đổi chỉ ở bộ nhớ,
-refresh sẽ khôi phục dữ liệu; không gọi API, dùng localStorage hay ghi database.
-Auth form vẫn là preview như bước 2. Dữ liệu mẫu chưa kết nối backend.
-
 `npm test` kiểm tra tiến độ Goal, completedAt, gỡ liên kết khi xóa Goal, số liệu
 Dashboard, sắp xếp và chuyển ngày giờ UTC+07:00.
 Các test Calendar kiểm tra ngày deadline, đổi/xóa Task, ranh giới tháng,
 file ICS cả ngày, giờ UTC, ID ổn định và xử lý dấu tiếng Việt/ký tự đặc biệt.
+
+## Cấu hình và các hàm gọi API
+
+Copy `.env.example` thành `.env`. Khi chạy backend local, dùng:
+
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+URL gồm `/api` ở cuối. Khi đổi giá trị, khởi động lại Vite; khi deploy, đặt biến
+này trên hosting frontend trước khi build. `.env` không được đưa lên Git.
+
+`src/services/apiClient.js` gọi API bằng `fetch`, gửi JWT cho endpoint cần Auth
+và trả nguyên `{ success, data, pagination? }`. Lỗi là `ApiError` với `message`,
+`status`, `code`, `field`; `field` dùng để hiển thị lỗi ở ô nhập tương ứng.
+Các hàm nhận tùy chọn `{ signal }` ở tham số cuối để hủy request khi cần.
+
+- `authApi.js`: `register`, `login`, `getCurrentUser`, `logout`. Đăng ký/đăng nhập
+  thành công lưu JWT bằng `authToken.js`; logout xóa JWT tại máy.
+- `taskApi.js`: `listTasks`, `getTask`, `createTask`, `updateTask`, `deleteTask`.
+  `updateTask(id, draft)` cần đủ trường chỉnh sửa, kể cả khi chỉ đổi trạng thái.
+- `goalApi.js`: `listGoals`, `getGoal`, `createGoal`, `updateGoal`,
+  `updateGoalProgress`, `deleteGoal`. Tiến độ manual dùng PATCH riêng.
+
+JWT dùng key `life_os_token` trong localStorage. Request có Auth nhận 401 sẽ xóa
+token tương ứng và về Login; đăng nhập sai chỉ trả lỗi để form hiển thị.
+Lỗi mạng và response không hợp lệ có mã `NETWORK_ERROR` và `INVALID_RESPONSE`.
+Ngày giờ truyền vào service phải là UTC ISO; các trường chỉ đọc không được gửi.
+
+Auth đã nối vào form và có route guard. `AuthProvider` gọi `/auth/me` khi refresh
+để xác minh JWT trước khi mở workspace. Nếu server tạm mất kết nối, trang xác minh
+có Try again hoặc Back to sign in; không mở nội dung được bảo vệ khi chưa xác minh.
+`AuthProvider` dùng `useState` giữ user/trạng thái và `useEffect` kiểm tra phiên
+khi mở ứng dụng. Form gọi `login` hoặc `register`; Sidebar gọi `logout`.
+`RequireAuth` đọc trạng thái này để mở trang hoặc chuyển về Login.
+Không có store quản lý phiên riêng hoặc đồng bộ đăng xuất giữa nhiều tab.
+
+Để kiểm thử thật, backend phải chạy tại URL trong `.env`, kết nối MongoDB và cho
+phép CORS từ địa chỉ frontend. Frontend không cần MongoDB URI hoặc JWT secret.
+Tasks, Goals, Dashboard và Calendar dùng API thật.
+
+Test service dùng fetch/storage giả, không gọi backend hoặc ghi Atlas.
+Các test kiểm tra payload đăng nhập/đăng ký, lưu/xóa JWT, lấy user, xử lý 401,
+lỗi API và validation cơ bản. Cần chạy frontend/backend để kiểm thử thao tác thật.
+
+## Trang Tasks dùng API thật
+
+`TasksPage.jsx` gọi API khi mở trang hoặc thay đổi bộ lọc. Backend lọc theo trạng
+thái/Goal/quá hạn, sắp xếp và phân trang 8 Task/trang. Bố cục desktop vẫn 4 card
+mỗi cột. Loading/lỗi/danh sách trống phản ánh request thật; không dùng Preview controls.
+
+`TaskDialog.jsx` lấy chi tiết mới nhất trước khi sửa, gọi API thêm/sửa/xóa và đổi
+trạng thái. `TaskForm.jsx` giữ draft, validate và hiển thị lỗi từng field. Nút gửi
+bị khóa trong lúc lưu; lưu lỗi thì giữ nội dung để sửa và thử lại. Xóa cần xác nhận.
+Lưu thành công tải lại danh sách và tổng số từ backend; xóa trang cuối sẽ về trang
+còn dữ liệu. Task lưu trên backend sẽ còn sau refresh khi backend hoạt động đúng.
+
+Goal ở bộ lọc và form Task lấy từ API thật qua `listAllGoals`, đọc hết các trang.
+Goal vừa tạo ở trang Goals sẽ có trong form Task khi mở trang Tasks. Chưa có Goal thật thì vẫn
+tạo Task với `goalId: null`. Ngày Task dùng cuối ngày theo múi giờ trình duyệt,
+chuyển sang UTC ISO; xóa ngày hoặc Goal trong form gửi `null`.
+
+Tiến độ Goal liên quan do backend cập nhật; frontend không tự tính tiến độ thật.
+
+Bộ lọc overdue ở backend đã chấp nhận cả boolean và chuỗi true/false, nên request từ Express 5 được lọc đúng.
+
+## Trang Goals dùng API thật
+
+`GoalsPage.jsx` tải 8 Goal mỗi trang từ backend, có loading, lỗi/thử lại và danh sách trống.
+`GoalForm.jsx` tạo/sửa tiêu đề, deadline và chế độ tiến độ. Deadline dùng cuối ngày
+ở múi giờ trình duyệt rồi chuyển sang UTC ISO; có thể để trống hoặc xóa deadline.
+
+`GoalDialog.jsx` tải chi tiết mới trước khi sửa. Goal manual nhận tiến độ ban đầu
+khi tạo; sau đó dùng **Save progress** để gọi PATCH riêng (số nguyên 0–100).
+Goal task-based chỉ hiển thị tiến độ do backend tính từ Task liên kết, không có ô sửa tay.
+Đổi chế độ bằng Edit: backend giữ tiến độ khi chuyển sang manual và tính lại khi về task-based.
+Xóa cần xác nhận; backend giữ các Task và gỡ liên kết Goal. Sau thao tác thành công,
+danh sách/tổng số được tải lại; xóa hết trang cuối tự quay về trang còn dữ liệu.
+
+## Dashboard dùng API thật
+
+`dashboardApi.js` gọi GET `/dashboard/summary` với JWT để lấy tổng Task, Task hoàn thành,
+Task quá hạn và tiến độ trung bình của các Goal active. Frontend hiển thị số liệu backend,
+không tự tính lại. Khi chưa có dữ liệu, các thẻ hiển thị 0.
+
+`DashboardPage.jsx` dùng `useState` và `useEffect`. Trang lấy 3 Task mới nhất của mỗi
+trạng thái todo/in_progress rồi ghép thành 3 Task chưa hoàn thành mới nhất; không tải
+hết Task chỉ để hiển thị phần xem trước. Goal được tải đủ các trang để hiện Goal active
+và tên Goal liên kết trong Task. Các form Task/Goal được dùng lại từ trang tương ứng.
+Sau khi lưu, trang tải lại số liệu và danh sách. Khi thao tác ở trang khác, quay lại
+Dashboard để lấy dữ liệu mới; có thể bấm Refresh để tải lại khi đang ở Dashboard.
+Loading, lỗi/thử lại và danh sách trống phản ánh API thật; không có Preview controls.
 
 ## Chuẩn bị cho Vercel
 
