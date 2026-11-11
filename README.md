@@ -374,6 +374,38 @@ npm install
 npm run dev
 ```
 
+The client requires Node.js 22.13+ (within the 22.x line) or Node.js 24+.
+Vite prints the local URL when it starts (normally `http://localhost:5173`).
+If that port is occupied, Vite selects another available port.
+
+Copy `client/.env.example` to `client/.env` and set `VITE_API_URL` to the
+backend API base URL, including `/api`. For local development:
+
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+Restart Vite after changing environment variables. Do not commit the private
+`.env` file. The frontend does not need the MongoDB URI or JWT secret.
+
+The React app uses routes for Login, Register, Dashboard, Tasks, Goals, and
+Calendar. Authenticated pages require a verified session. Tasks, Goals,
+Dashboard, and Calendar use the backend API; the Calendar can export its current
+events and task deadlines as an `.ics` file. The export is a snapshot and does
+not sync later changes automatically.
+
+Useful client scripts (run from `client/`):
+
+```bash
+npm run lint
+npm test
+npm run build
+npm run preview
+```
+
+`preview` serves the local production build; it does not deploy the app. Client
+tests use mocked fetch/storage and do not write to MongoDB Atlas.
+
 ### Server
 
 ```bash
@@ -426,3 +458,4 @@ Additional technical documentation:
 - `docs/openapi.yaml` — REST API specification
 - `docs/architecture.md` — architecture, conventions, and error handling
 - `docs/database.md` — database models and relationships
+- `client/.env.example` — frontend API URL configuration template
