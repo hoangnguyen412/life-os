@@ -19,9 +19,9 @@ export default function AuthLayout() {
         <img src={illustration} alt="A checklist and calendar beside a winding path leading to a goal flag." width={1024} height={1536} fetchPriority="high" className="h-28 w-full max-w-xl rounded-2xl object-contain sm:h-auto sm:max-h-[calc(100dvh-5.5rem)]" />
       </aside>
 
-      <section aria-labelledby="auth-title" className="flex items-center justify-center px-7 py-11 sm:px-8 sm:py-15 lg:px-12">
+      <section aria-labelledby="auth-title" className="flex items-center justify-center px-7 py-6 sm:px-8 sm:py-15 lg:px-12">
         <div className="w-full max-w-90">
-          <Brand className="mb-9" />
+          <Brand className="mb-5 sm:mb-9" />
           {status === 'loading' ? <p role="status">Checking your session…</p> : <Outlet />}
         </div>
       </section>

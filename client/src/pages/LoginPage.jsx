@@ -9,8 +9,8 @@ export default function LoginPage() {
   const { state } = useLocation()
   return (
     <>
-      <h1 id="auth-title" className="mb-2.5 text-[28px] font-medium leading-tight">Sign in</h1>
-      <p className="mb-7.5 text-os-muted">Continue managing your tasks and goals.</p>
+      <h1 id="auth-title" className="mb-2 text-[28px] font-medium leading-tight sm:mb-2.5">Sign in</h1>
+      <p className="mb-5 text-os-muted sm:mb-7.5">Continue managing your tasks and goals.</p>
       <AuthForm mode="login" />
       <p className="mt-6.5 text-center">
         New to Life OS?{' '}

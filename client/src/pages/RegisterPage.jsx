@@ -9,8 +9,8 @@ export default function RegisterPage() {
   const { state } = useLocation()
   return (
     <>
-      <h1 id="auth-title" className="mb-2.5 text-[28px] font-medium leading-tight">Create an account</h1>
-      <p className="mb-7.5 text-os-muted">Start managing your tasks and goals.</p>
+      <h1 id="auth-title" className="mb-2 text-[28px] font-medium leading-tight sm:mb-2.5">Create an account</h1>
+      <p className="mb-5 text-os-muted sm:mb-7.5">Start managing your tasks and goals.</p>
       <AuthForm mode="register" />
       <p className="mt-6.5 text-center">
         Already have an account?{' '}
