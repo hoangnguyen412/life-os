@@ -74,7 +74,7 @@ export default function AuthForm({ mode }) {
   // The visibility button uses type="button" to avoid accidentally submitting the form.
   return (
     <form noValidate onSubmit={handleSubmit} aria-busy={pending}>
-      <fieldset disabled={pending} className="min-w-0 space-y-5.5">
+      <fieldset disabled={pending} className="min-w-0 space-y-4 sm:space-y-5.5">
         {isRegister && (
           <FormField name="name" label="Name" type="text" autoComplete="name" autoFocus value={values.name} onChange={handleChange} error={errors.name} />
         )}
@@ -93,7 +93,7 @@ export default function AuthForm({ mode }) {
         </FormField>
       </fieldset>
 
-      <button type="submit" disabled={pending} className="mt-7 min-h-11 w-full cursor-pointer rounded-lg border border-os-primary bg-os-primary px-4 py-3 font-medium text-white transition-colors hover:bg-os-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary disabled:cursor-wait disabled:opacity-60">
+      <button type="submit" disabled={pending} className="mt-5 min-h-11 w-full cursor-pointer rounded-lg border border-os-primary bg-os-primary px-4 py-3 font-medium text-white transition-colors hover:bg-os-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary disabled:cursor-wait disabled:opacity-60 sm:mt-7">
         {pending ? (isRegister ? 'Creating account…' : 'Signing in…') : isRegister ? 'Sign up' : 'Sign in'}
       </button>
       {pending && <p role="status" className="mt-4 text-sm text-os-muted">Please wait…</p>}
