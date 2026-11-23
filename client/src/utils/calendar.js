@@ -2,7 +2,18 @@
  * Pure schedule projection used by the Calendar UI and ICS export.
  * Merge timed events with date-only Task views without changing source collections.
  */
-import { dateOnly, offsetDate, shiftMonth, timeToISO } from './dates.js'
+import { dateOnly, formatTime, offsetDate, shiftMonth, timeToISO } from './dates.js'
+
+// Use the last occupied day so an event ending at midnight stays on the previous day.
+export function eventTimeLabel(event, date) {
+  const firstDay = dateOnly(event.startTime)
+  const lastDay = dateOnly(new Date(new Date(event.endTime).getTime() - 1))
+  const endLabel = dateOnly(event.endTime) === lastDay ? formatTime(event.endTime) : '24:00'
+  if (firstDay === lastDay) return `${formatTime(event.startTime)}–${endLabel}`
+  if (date === firstDay) return `Starts ${formatTime(event.startTime)}`
+  if (date === lastDay) return `Ends ${endLabel}`
+  return 'Continues'
+}
 
 // Deadlines are derived from Tasks, not duplicate CalendarEvents.
 export function calendarItems(tasks, events) {

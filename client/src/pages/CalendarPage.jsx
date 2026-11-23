@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { listCalendarEvents, listCalendarTasks } from '../services/calendarApi.js'
 import { listAllGoals } from '../services/goalApi.js'
 import { dateOnly, formatDate, formatTime, monthCells, shiftMonth, timeToISO } from '../utils/dates.js'
-import { calendarItems, itemsInMonth, occursOn } from '../utils/calendar.js'
+import { calendarItems, eventTimeLabel, itemsInMonth, occursOn } from '../utils/calendar.js'
 import { downloadCalendarICS } from '../utils/icalendar.js'
 import { isOverdue } from '../mocks/mockStore.js'
 import PageHeading from '../components/workspace/PageHeading.jsx'
@@ -130,8 +130,9 @@ export default function CalendarPage() {
                   // Events keep time labels; tasks use Task labels and status-specific styling.
                   // Mobile cells show symbols; accessible labels and the list retain full details.
                   const appearance = item.kind === 'task' ? taskAppearance(item) : null
-                  return <button key={item.key} aria-label={`View ${item.kind} ${item.title} on ${date}${item.allDay ? ` · Task · ${appearance.label}` : ''}`} title={`${item.title} · ${item.allDay ? `Task · ${appearance.label}` : formatTime(item.startTime)}`} className={`mb-1 block min-h-7 w-full overflow-hidden rounded border p-1 text-left text-[10px] sm:text-xs ${appearance ? `${appearance.classes} border-l-4 font-medium` : 'border-os-primary bg-os-primary font-semibold text-white shadow-sm hover:bg-os-primary-hover'}`} onClick={() => view(item)}>
-                    <span className="hidden break-words sm:block">{item.allDay ? `${appearance.symbol} Task · ` : `${formatTime(item.startTime)} `}{item.title}</span>
+                  const timeLabel = item.allDay ? '' : eventTimeLabel(item, date)
+                  return <button key={item.key} aria-label={`View ${item.kind} ${item.title} on ${date} · ${item.allDay ? `Task · ${appearance.label}` : timeLabel}`} title={`${item.title} · ${item.allDay ? `Task · ${appearance.label}` : timeLabel}`} className={`mb-1 block min-h-7 w-full overflow-hidden rounded border p-1 text-left text-[10px] sm:text-xs ${appearance ? `${appearance.classes} border-l-4 font-medium` : 'border-os-primary bg-os-primary font-semibold text-white shadow-sm hover:bg-os-primary-hover'}`} onClick={() => view(item)}>
+                    <span className="hidden break-words sm:block">{item.allDay ? `${appearance.symbol} Task · ` : `${timeLabel} · `}{item.title}</span>
                     <span className="block text-center sm:hidden">{appearance?.symbol ?? '●'}</span>
                   </button>
                 })}

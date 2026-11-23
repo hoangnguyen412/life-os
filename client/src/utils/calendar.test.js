@@ -5,7 +5,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calendarItems, itemsInMonth, occursOn } from './calendar.js'
+import { calendarItems, eventTimeLabel, itemsInMonth, occursOn } from './calendar.js'
 import { createCalendarICS } from './icalendar.js'
 import { dateToISO } from './dates.js'
 
@@ -15,6 +15,22 @@ const event = { _id: 'a', title: 'Meeting', startTime: '2026-10-31T16:00:00.000Z
 const now = '2026-10-13T05:00:00.000Z'
 // Undo ICS continuation lines before checking complete logical properties.
 const unfold = (text) => text.replace(/\r\n /g, '')
+
+test('event labels show the start, continuation and end on their Vietnam days', () => {
+  const event = { startTime: '2026-11-23T02:00:00.000Z', endTime: '2026-11-25T03:00:00.000Z' }
+  assert.equal(eventTimeLabel(event, '2026-11-23'), 'Starts 09:00')
+  assert.equal(eventTimeLabel(event, '2026-11-24'), 'Continues')
+  assert.equal(eventTimeLabel(event, '2026-11-25'), 'Ends 10:00')
+  assert.equal(eventTimeLabel({ ...event, endTime: '2026-11-23T03:00:00.000Z' }, '2026-11-23'), '09:00–10:00')
+})
+
+test('midnight endings are labelled on the last occupied day, including across months', () => {
+  const event = { startTime: '2026-11-29T17:00:00.000Z', endTime: '2026-12-01T17:00:00.000Z' }
+  assert.equal(eventTimeLabel(event, '2026-11-30'), 'Starts 00:00')
+  assert.equal(eventTimeLabel(event, '2026-12-01'), 'Ends 24:00')
+  assert.equal(occursOn(event, '2026-12-02'), false)
+  assert.equal(eventTimeLabel({ ...event, startTime: '2026-12-01T02:00:00.000Z' }, '2026-12-01'), '09:00–24:00')
+})
 
 test('deadlines appear once on their Vietnam day, including completed tasks', () => {
   const items = calendarItems([task, { ...task, _id: 'b', dueDate: null }, { ...task, _id: 'c', status: 'done' }], [event])
