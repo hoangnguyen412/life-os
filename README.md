@@ -8,6 +8,19 @@ The project is designed around a modular architecture so that advanced features 
 
 ---
 
+## Live Demo & Deployment
+
+- **Live Application (Custom Domain):** https://lifeos.is.id.vn
+- **Vercel Default Domain:** https://life-os-theta-seven-71.vercel.app
+- **Backend API Base URL:** https://life-os-2yjj.onrender.com/api
+- **Swagger API Documentation:** https://life-os-2yjj.onrender.com/api-docs
+- **Backend Health Check:** https://life-os-2yjj.onrender.com/health
+- **Database:** MongoDB Atlas
+
+The React frontend is hosted on Vercel, the Express API on Render, and the database on MongoDB Atlas. The `lifeos.is.id.vn` subdomain is managed through iNET DNS and connected to Vercel using a CNAME record.
+
+---
+
 ## Overview
 
 Traditional productivity applications often separate tasks, goals, calendars, and progress tracking into isolated tools.
@@ -20,7 +33,7 @@ Traditional productivity applications often separate tasks, goals, calendars, an
 - Monitor productivity through a dashboard
 - Extend the system with AI-assisted recommendations and planning
 
-The core system focuses on reliable task, goal, and calendar management. Advanced AI and productivity features are developed as independent modules.
+The core system focuses on reliable task, goal, and calendar management. Advanced AI and productivity features are planned as optional modules.
 
 ---
 
@@ -45,6 +58,7 @@ The core system focuses on reliable task, goal, and calendar management. Advance
 - Store event start and end times
 - Validate event time ranges
 - Keep calendar events independent from tasks in the core system
+- View task deadlines alongside events and export an `.ics` calendar snapshot
 
 ### Dashboard
 The dashboard provides a high-level overview of the user's current productivity, including:
@@ -58,7 +72,7 @@ The dashboard provides a high-level overview of the user's current productivity,
 
 ## Planned Extensions
 
-Advanced features are intentionally separated from the core system and may be added incrementally.
+The following optional features are planned extensions and are not part of the deployed core MVP.
 
 ### AI Task Priority
 AI analyzes incomplete tasks and returns an ordered priority list with short explanations. The backend validates the AI result before presenting it to the user.
@@ -79,7 +93,7 @@ Independent habit management with basic streak tracking.
 ### AI Daily Planner
 An advanced feature that can generate a daily schedule using tasks and calendar events. This is the highest-complexity optional feature and will only be implemented if the core system is stable.
 
-> Only 1–2 extension features are targeted for the final implementation to keep the system stable and maintainable.
+> These features remain future work; the deployed version focuses on the core system.
 
 ---
 
@@ -118,21 +132,28 @@ Business logic is isolated inside the backend service layer so that new features
 ```text
 life-os/
 ├── client/
-│   ├── pages/
-│   ├── components/
-│   ├── layouts/
-│   ├── services/
-│   ├── hooks/
-│   └── utils/
+│   ├── src/
+│   │   ├── auth/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── layouts/
+│   │   ├── mocks/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── .env.example
+│   └── vercel.json
 │
 ├── server/
+│   ├── config/
+│   ├── controllers/
+│   ├── middleware/
 │   ├── models/
 │   ├── routes/
-│   ├── controllers/
 │   ├── services/
-│   ├── middleware/
-│   ├── config/
-│   └── seed/
+│   ├── tests/
+│   └── server.js
 │
 └── docs/
     ├── openapi.yaml
@@ -148,7 +169,7 @@ life-os/
 - React
 - Vite
 - Tailwind CSS
-- Recharts
+- React Router
 
 ### Backend
 - Node.js
@@ -429,9 +450,9 @@ npm test
 
 ## Project Status
 
-The project is developed incrementally.
+The core MVP has been implemented and deployed successfully.
 
-**Core scope:**
+**Implemented core scope:**
 
 - Task Management
 - Goal & Progress Tracking
@@ -439,7 +460,7 @@ The project is developed incrementally.
 - Dashboard
 - Authentication
 
-**Advanced scope:**
+**Planned extensions (not implemented in the deployed MVP):**
 
 - AI Task Priority
 - Goal Deadline Impact
@@ -447,7 +468,7 @@ The project is developed incrementally.
 - Habit Tracking
 - AI Daily Planner
 
-Advanced features are selected based on development progress and are implemented only after the core MVP is stable.
+Production checks confirmed frontend access, API health, registration and login, Task and Goal creation, and data persistence after refresh. Optional extensions remain future work.
 
 ---
 
