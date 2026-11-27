@@ -209,6 +209,44 @@ test('protected 401 clears the expired session and redirects; bad login stays in
   assert.deepEqual(redirects, [])
 })
 
+test('rate-limited login and registration show the wait time without changing the session or retrying', async (t) => {
+  setToken('existing-token')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    return Response.json({ success: false, error: {
+      code: 'RATE_LIMITED', message: 'Too many attempts. Please try again later.', retryAfter: 120,
+    } }, { status: 429 })
+  })
+
+  for (const authenticate of [authApi.login, authApi.register]) {
+    await assert.rejects(authenticate({ name: 'User', email: 'user@example.com', password: 'password' }), (error) => {
+      assert.ok(error instanceof ApiError)
+      assert.equal(error.status, 429)
+      assert.equal(error.code, 'RATE_LIMITED')
+      assert.equal(error.retryAfter, 120)
+      assert.equal(error.message, 'Too many attempts. Please try again in 120 seconds.')
+      return true
+    })
+  }
+  assert.equal(getToken(), 'existing-token')
+  assert.deepEqual(redirects, [])
+  assert.equal(calls.length, 2)
+})
+
+test('rate limits without a valid wait time still show a useful message', async (t) => {
+  for (const retryAfter of [undefined, null, 0, -1, 'invalid']) {
+    t.mock.method(globalThis, 'fetch', async () => Response.json({
+      success: false, error: { code: 'RATE_LIMITED', retryAfter },
+    }, { status: 429 }))
+    await assert.rejects(authApi.login({ email: 'user@example.com', password: 'password' }), (error) => {
+      assert.equal(error.status, 429)
+      assert.equal(error.retryAfter, undefined)
+      assert.equal(error.message, 'Too many attempts. Please try again later.')
+      return true
+    })
+  }
+})
+
 test('a delayed unauthorized response does not clear a newer login', async (t) => {
   setToken('old-token')
   t.mock.method(globalThis, 'fetch', async () => {
