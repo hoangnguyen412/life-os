@@ -1,6 +1,7 @@
 /** Real Task details, editing and deletion. All writes use taskApi and server results. */
 import { useEffect, useState } from 'react'
 import * as taskApi from '../../services/taskApi.js'
+import { listAllGoals } from '../../services/goalApi.js'
 import { formatTaskDate } from '../../utils/taskForm.js'
 import Modal from '../workspace/Modal.jsx'
 import TaskForm from './TaskForm.jsx'
@@ -12,6 +13,23 @@ export default function TaskDialog({ dialog, goals, onClose, onSaved }) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [loadedGoals, setLoadedGoals] = useState(null)
+  const [goalsLoading, setGoalsLoading] = useState(!goals)
+  const goalOptions = goals ?? loadedGoals ?? []
+
+  // Calendar loads Goals only when a Task dialog opens; other pages provide their list.
+  useEffect(() => {
+    if (goals) return
+    const controller = new AbortController()
+    listAllGoals({ signal: controller.signal }).then((items) => {
+      if (!controller.signal.aborted) setLoadedGoals(items)
+    }).catch((failure) => {
+      if (!controller.signal.aborted) setError(failure.message)
+    }).finally(() => {
+      if (!controller.signal.aborted) setGoalsLoading(false)
+    })
+    return () => controller.abort()
+  }, [goals, attempt])
 
   // Read fresh details before editing, even if the list was loaded earlier.
   useEffect(() => {
@@ -29,7 +47,13 @@ export default function TaskDialog({ dialog, goals, onClose, onSaved }) {
 
   // Keep the dialog open while a mutation is in progress to avoid accidental repeats.
   function close() { if (!pending) onClose() }
-  function retry() { setError(''); setLoading(true); setAttempt((current) => current + 1) }
+  function retry() {
+    setError('')
+    setLoading(Boolean(dialog.id))
+    setLoadedGoals(null)
+    setGoalsLoading(!goals)
+    setAttempt((current) => current + 1)
+  }
   function changeMode(next) { setError(''); setMode(next) }
 
   async function save(payload) {
@@ -77,13 +101,13 @@ export default function TaskDialog({ dialog, goals, onClose, onSaved }) {
   const fields = task ? [
     ['Status', { todo: 'To do', in_progress: 'In progress', done: 'Completed' }[task.status]],
     ['Priority', task.priority], ['Due date', formatTaskDate(task.dueDate)],
-    ['Goal', goals.find((goal) => goal._id === task.goalId)?.title || (task.goalId ? 'Linked goal unavailable' : 'No linked goal')],
+    ['Goal', goalOptions.find((goal) => goal._id === task.goalId)?.title || (task.goalId ? 'Linked goal unavailable' : 'No linked goal')],
   ] : []
 
   return <Modal title={title} onClose={close}>
-    {loading ? <p role="status">Loading task…</p>
-      : dialog.id && !task ? <><p role="alert" className="text-red-700">{error || 'This task could not be found.'}</p><button className="os-button mt-4" onClick={retry}>Try again</button></>
-        : mode === 'create' || mode === 'edit' ? <TaskForm task={task} defaults={dialog.defaults} goals={goals} pending={pending} onSave={save} onCancel={close} />
+    {loading || (!goals && goalsLoading) ? <p role="status">Loading task…</p>
+      : (dialog.id && !task) || (!goals && loadedGoals === null) ? <><p role="alert" className="text-red-700">{error || 'Could not load task details.'}</p><button className="os-button mt-4" onClick={retry}>Try again</button></>
+        : mode === 'create' || mode === 'edit' ? <TaskForm task={task} defaults={dialog.defaults} goals={goalOptions} pending={pending} onSave={save} onCancel={close} />
           : <div aria-busy={pending}>
             {mode === 'delete' ? <><p className="font-medium break-words">{task.title}</p><p className="mt-3 text-os-muted">Delete this task permanently?</p></>
               : <>
