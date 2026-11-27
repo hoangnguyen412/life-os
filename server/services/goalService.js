@@ -46,11 +46,12 @@ async function calculateProgress(goal, userId) {
     if (completed < total) {
       goal.progress = Math.min(goal.progress, 99);
     }
+    goal.status = total > 0 && completed === total ? 'completed' : 'active';
   } else {
     goal.progress = goal.manualProgress;
+    goal.status = goal.progress === 100 ? 'completed' : 'active';
   }
 
-  goal.status = goal.progress === 100 ? 'completed' : 'active';
   return goal;
 }
 

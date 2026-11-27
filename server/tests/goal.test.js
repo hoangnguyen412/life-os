@@ -317,6 +317,7 @@ test('task_based Goals recalculate to zero with no Tasks and round completed rat
   totalTasks = 0;
   completedTasks = 0;
   goal.progress = 100;
+  goal.status = 'completed';
   await goalService.recalculateProgress(GOAL_ID, USER_ID);
   assert.equal(goal.progress, 0);
   assert.equal(goal.status, 'active');
