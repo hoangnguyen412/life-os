@@ -135,6 +135,51 @@ test('Task list validation applies defaults and rejects invalid filters and pagi
   assert.equal(error.field, 'overdue');
 });
 
+test('deadline range validation accepts paired UTC bounds and rejects incomplete or invalid ranges', async () => {
+  const dueFrom = '2026-10-31T17:00:00.000Z';
+  const dueTo = '2026-11-30T17:00:00.000Z';
+  assert.equal(await validationError(listTasksValidation, { query: {} }), undefined);
+  assert.equal(await validationError(listTasksValidation, { query: { dueFrom, dueTo } }), undefined);
+  for (const query of [
+    { dueFrom }, { dueTo }, { dueFrom, dueTo: dueFrom },
+    { dueFrom: dueTo, dueTo: dueFrom },
+    { dueFrom: '2026-11-01', dueTo },
+    { dueFrom: '2026-02-30T00:00:00Z', dueTo },
+    { dueFrom: '2026-11-01T00:00:00+07:00', dueTo },
+    { dueFrom: '', dueTo }, { dueFrom: [dueFrom, dueFrom], dueTo },
+  ]) {
+    const error = await validationError(listTasksValidation, { query });
+    assert.equal(error.status, 400);
+    assert.equal(error.code, 'VALIDATION_ERROR');
+    assert.ok(['dueFrom', 'dueTo'].includes(error.field));
+  }
+});
+
+test('deadline range reaches the database with inclusive start, exclusive end and existing filters', async (t) => {
+  let pipeline;
+  t.mock.method(Task, 'aggregate', async (value) => {
+    pipeline = value;
+    return [{ data: [], total: [] }];
+  });
+  const dueFrom = '2026-10-31T17:00:00.000Z';
+  const dueTo = '2026-11-30T17:00:00.000Z';
+  await taskService.listTasks(USER_ID, {
+    dueFrom, dueTo, status: 'todo', goalId: 'none', overdue: true, page: 2, limit: 8,
+  });
+  const filter = pipeline[0].$match;
+  assert.equal(filter.userId.toString(), USER_ID);
+  assert.deepEqual(filter.$and, [
+    { dueDate: { $gte: new Date(dueFrom), $lt: new Date(dueTo) } },
+    { status: 'todo' },
+    { goalId: null },
+    { dueDate: { $lt: filter.$and[3].dueDate.$lt }, status: { $ne: 'done' } },
+  ]);
+  assert.deepEqual(pipeline[1].$facet.data.slice(-2), [{ $skip: 8 }, { $limit: 8 }]);
+  assert.deepEqual(taskService.buildTaskFilter(USER_ID, {}), {
+    userId: new mongoose.Types.ObjectId(USER_ID),
+  });
+});
+
 test('create uses authenticated owner, defaults, timestamps, and ignores client userId', async (t) => {
   const session = mockTaskTransaction(t);
   let persisted;

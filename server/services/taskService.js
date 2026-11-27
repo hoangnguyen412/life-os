@@ -28,6 +28,12 @@ function buildTaskFilter(userId, query, now = new Date()) {
   const filter = { userId: new mongoose.Types.ObjectId(userId) };
   const conditions = [];
 
+  if (query.dueFrom && query.dueTo) {
+    conditions.push({
+      dueDate: { $gte: new Date(query.dueFrom), $lt: new Date(query.dueTo) },
+    });
+  }
+
   if (query.status) {
     conditions.push({ status: query.status });
   }

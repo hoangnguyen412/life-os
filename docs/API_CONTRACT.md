@@ -183,9 +183,16 @@ Register and login return the same token/user shape. `user` contains `_id`, `nam
 | `status` | `todo`, `in_progress`, `done` | No status filter when omitted |
 | `goalId` | ObjectId string or `none` | `none` means Tasks with no Goal |
 | `overdue` | `true`, `false` | No overdue filter when omitted |
+| `dueFrom`, `dueTo` | ISO UTC date-time strings, supplied together with `dueFrom < dueTo` | No deadline range filter when omitted |
 | `sort` | `dueDate_asc`, `priority_desc`, `createdAt_desc` | `dueDate_asc` |
 | `page` | Integer ≥ 1 | `1` |
 | `limit` | Integer 1–100 | `20` |
+
+The deadline range selects Tasks with `dueDate >= dueFrom AND dueDate < dueTo`.
+Tasks without a due date are excluded when a range is supplied. The range combines
+with the existing status, Goal and overdue filters. Missing one bound, invalid UTC
+timestamps, or equal/reversed bounds return `400 VALIDATION_ERROR`. Omit both bounds
+to retain the existing list behavior, including full-calendar ICS export.
 
 Sort rules:
 

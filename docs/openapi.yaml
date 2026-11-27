@@ -107,6 +107,18 @@ paths:
               - $ref: '#/components/schemas/ObjectId'
               - type: string
                 enum: [none]
+        - name: dueFrom
+          in: query
+          description: Inclusive UTC deadline bound. Send together with dueTo, with dueFrom earlier than dueTo. Tasks without a due date are excluded when the range is supplied.
+          schema:
+            type: string
+            format: date-time
+        - name: dueTo
+          in: query
+          description: Exclusive UTC deadline bound. Send together with dueFrom. Omit both bounds to keep the full Task list, including tasks without a due date.
+          schema:
+            type: string
+            format: date-time
         - name: overdue
           in: query
           description: Filter according to dueDate < now and status != done. Tasks without dueDate are not overdue.

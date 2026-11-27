@@ -29,6 +29,13 @@ const title = (required) => {
 const taskId = param('id')
   .isMongoId().withMessage('id must be a valid ObjectId');
 
+const dueDateBound = (field) => query(field)
+  .optional({ values: 'undefined' })
+  .isString().withMessage(`${field} must be an ISO-8601 UTC date-time`).bail()
+  .isISO8601({ strict: true, strictSeparator: true })
+  .withMessage(`${field} must be an ISO-8601 UTC date-time`).bail()
+  .matches(/T.*Z$/).withMessage(`${field} must be an ISO-8601 UTC date-time`);
+
 const createTaskValidation = [
   title(true),
   descriptionOrNull('description').optional({ values: 'undefined' }),
@@ -52,6 +59,14 @@ const replaceTaskValidation = [
 ];
 
 const listTasksValidation = [
+  dueDateBound('dueFrom'),
+  dueDateBound('dueTo'),
+  query('dueTo').custom((dueTo, { req }) => {
+    const dueFrom = req.query.dueFrom;
+    if (dueFrom === undefined && dueTo === undefined) return true;
+    return typeof dueFrom === 'string' && typeof dueTo === 'string'
+      && Date.parse(dueFrom) < Date.parse(dueTo);
+  }).withMessage('dueFrom and dueTo must be provided together, with dueFrom earlier than dueTo'),
   query('status').optional({ values: 'undefined' }).isIn(['todo', 'in_progress', 'done'])
     .withMessage('status must be todo, in_progress, or done'),
   query('goalId').optional({ values: 'undefined' }).custom((value) => (
