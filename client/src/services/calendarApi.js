@@ -18,8 +18,9 @@ export function listCalendarEvents(range, signal) {
   return allPages((page) => apiRequest('/events', { query: { ...range, page, limit: 100 }, signal }))
 }
 
-export function listCalendarTasks(signal) {
-  return allPages((page) => listTasks({ page, limit: 100 }, { signal }))
+// Monthly views pass a range; full-calendar exports omit it.
+export function listCalendarTasks(signal, range = {}) {
+  return allPages((page) => listTasks({ dueFrom: range.from, dueTo: range.to, page, limit: 100 }, { signal }))
 }
 
 export const createEvent = (body) => apiRequest('/events', { method: 'POST', body })

@@ -46,7 +46,7 @@ export default function CalendarPage() {
     async function load() {
       try {
         const [tasks, events, goals] = await Promise.all([
-          listCalendarTasks(signal),
+          listCalendarTasks(signal, range),
           listCalendarEvents(range, signal),
           listAllGoals({ signal }),
         ])

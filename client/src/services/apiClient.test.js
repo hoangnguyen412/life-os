@@ -7,6 +7,7 @@ import * as authApi from './authApi.js'
 import * as taskApi from './taskApi.js'
 import * as goalApi from './goalApi.js'
 import { getDashboardSummary } from './dashboardApi.js'
+import { listCalendarTasks } from './calendarApi.js'
 import { authRedirect } from '../utils/authRedirect.js'
 import validateAuth from '../utils/validateAuth.js'
 
@@ -42,6 +43,44 @@ afterEach(() => {
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else delete globalThis.window
 })
+
+test('Calendar task requests keep the displayed month range on every page', async (t) => {
+  const range = { from: '2026-10-31T17:00:00.000Z', to: '2026-11-30T17:00:00.000Z' }
+  const signal = new AbortController().signal
+  setToken('calendar-session')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    const params = new URL(url).searchParams
+    const page = Number(params.get('page'))
+    assert.equal(params.get('dueFrom'), range.from)
+    assert.equal(params.get('dueTo'), range.to)
+    assert.equal(params.get('limit'), '100')
+    assert.equal(options.signal, signal)
+    assert.equal(options.headers.Authorization, 'Bearer calendar-session')
+    return Response.json({ success: true, data: [{ _id: `task-${page}` }], pagination: { page, totalPages: 2 } })
+  })
+
+  assert.deepEqual(await listCalendarTasks(signal, range), [{ _id: 'task-1' }, { _id: 'task-2' }])
+  assert.equal(calls.length, 2)
+});
+
+test('full Calendar export loads all Task pages without the displayed month range', async (t) => {
+  const tasks = [
+    { _id: 'november', dueDate: '2026-11-23T16:59:59.999Z' },
+    { _id: 'december', dueDate: '2026-12-25T16:59:59.999Z' },
+  ]
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    const params = new URL(url).searchParams
+    assert.equal(params.has('dueFrom'), false)
+    assert.equal(params.has('dueTo'), false)
+    const page = Number(params.get('page'))
+    return Response.json({ success: true, data: [tasks[page - 1]], pagination: { page, totalPages: 2 } })
+  })
+
+  assert.deepEqual(await listCalendarTasks(), tasks)
+  assert.equal(calls.length, 2)
+});
 
 test('list requests retain pagination, encode filters, and send the current JWT', async (t) => {
   const envelope = { success: true, data: [], pagination: { page: 2, limit: 8, total: 0, totalPages: 0 } }
