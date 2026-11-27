@@ -346,6 +346,38 @@ test('task_based progress stays below 100 until all Tasks are done', async (t) =
   assert.equal(goal.status, 'active');
 });
 
+test('Task transaction writes the owned Goal even when its rounded progress is unchanged', async (t) => {
+  const session = {};
+  const goal = goalDocument({ progress: 50 });
+  const calls = [];
+  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
+    assert.equal(filter._id.toString(), GOAL_ID);
+    assert.equal(filter.userId.toString(), USER_ID);
+    assert.deepEqual(update, { $inc: { taskRevision: 1 } });
+    assert.equal(options.session, session);
+    assert.equal(options.new, true);
+    calls.push('write Goal');
+    return goal;
+  });
+  t.mock.method(Goal, 'findOne', async () => {
+    assert.fail('a Task transaction must write its Goal before reading progress');
+  });
+  t.mock.method(Task, 'countDocuments', async (filter, options) => {
+    assert.equal(options.session, session);
+    calls.push('count Tasks');
+    return filter.status === 'done' ? 1 : 2;
+  });
+  goal.save = async (options) => {
+    assert.equal(options.session, session);
+    calls.push('save Goal');
+  };
+
+  const result = await goalService.recalculateProgress(GOAL_ID, USER_ID, session);
+  assert.equal(result.progress, 50);
+  assert.deepEqual(calls, ['write Goal', 'count Tasks', 'count Tasks', 'save Goal']);
+  assert.equal(Object.hasOwn(goalService.serializeGoal(goal), 'taskRevision'), false);
+});
+
 test('PUT switching to manual copies current task progress; switching back recalculates', async (t) => {
   const goal = goalDocument({ progress: 60, status: 'active' });
   const taskFilters = [];

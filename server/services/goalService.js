@@ -55,10 +55,14 @@ async function calculateProgress(goal, userId, session) {
 }
 
 async function recalculateProgress(goalId, userId, session) {
-  const goal = await Goal.findOne({
+  const filter = {
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  }, null, { session });
+  };
+  // A real write makes concurrent Task/Goal transactions conflict and retry.
+  const goal = session
+    ? await Goal.findOneAndUpdate(filter, { $inc: { taskRevision: 1 } }, { session, new: true })
+    : await Goal.findOne(filter);
   if (!goal) return null;
 
   await calculateProgress(goal, userId, session);

@@ -232,8 +232,10 @@ test('Goal save failure rejects the Task creation transaction and all queries sh
     taskCreated = true;
     return [taskDocument(fields)];
   });
-  t.mock.method(Goal, 'findOne', async (filter, projection, options) => {
+  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
     assert.equal(options.session, session);
+    assert.deepEqual(update, { $inc: { taskRevision: 1 } });
+    assert.equal(options.new, true);
     assert.equal(taskCreated, true);
     return {
       _id: new mongoose.Types.ObjectId(GOAL_ID),
