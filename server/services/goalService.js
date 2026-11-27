@@ -42,6 +42,10 @@ async function calculateProgress(goal, userId) {
       Task.countDocuments({ ...taskFilter, status: 'done' }),
     ]);
     goal.progress = total === 0 ? 0 : Math.round((completed / total) * 100);
+    // Rounding must not show full completion while unfinished Tasks remain.
+    if (completed < total) {
+      goal.progress = Math.min(goal.progress, 99);
+    }
   } else {
     goal.progress = goal.manualProgress;
   }

@@ -322,6 +322,29 @@ test('task_based Goals recalculate to zero with no Tasks and round completed rat
   assert.equal(goal.status, 'active');
 });
 
+test('task_based progress stays below 100 until all Tasks are done', async (t) => {
+  const goal = goalDocument();
+  let completedTasks = 199;
+  t.mock.method(Goal, 'findOne', async () => goal);
+  t.mock.method(Task, 'countDocuments', async (filter) => (
+    filter.status === 'done' ? completedTasks : 200
+  ));
+
+  await goalService.recalculateProgress(GOAL_ID, USER_ID);
+  assert.equal(goal.progress, 99);
+  assert.equal(goal.status, 'active');
+
+  completedTasks = 200;
+  await goalService.recalculateProgress(GOAL_ID, USER_ID);
+  assert.equal(goal.progress, 100);
+  assert.equal(goal.status, 'completed');
+
+  completedTasks = 199;
+  await goalService.recalculateProgress(GOAL_ID, USER_ID);
+  assert.equal(goal.progress, 99);
+  assert.equal(goal.status, 'active');
+});
+
 test('PUT switching to manual copies current task progress; switching back recalculates', async (t) => {
   const goal = goalDocument({ progress: 60, status: 'active' });
   const taskFilters = [];
