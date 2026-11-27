@@ -349,9 +349,14 @@ test('get, update, and delete queries are scoped by the authenticated user', asy
 });
 
 test('foreign Task reads and deletes return NOT_FOUND', async (t) => {
+  const session = mockTaskTransaction(t);
   const queries = [];
   t.mock.method(Task, 'findOne', async (query) => { queries.push(query); return null; });
-  t.mock.method(Task, 'findOneAndDelete', async (query) => { queries.push(query); return null; });
+  t.mock.method(Task, 'findOneAndDelete', async (query, options) => {
+    assert.equal(options.session, session);
+    queries.push(query);
+    return null;
+  });
 
   await assert.rejects(taskService.getTask(USER_ID, TASK_ID), (error) => error.status === 404);
   await assert.rejects(taskService.deleteTask(USER_ID, TASK_ID), (error) => error.status === 404);
@@ -467,15 +472,58 @@ test('failure updating the destination Goal rejects the whole Task update transa
 });
 
 test('deleting a linked Task recalculates its Goal', async (t) => {
+  const session = mockTaskTransaction(t);
   const doc = taskDocument({ goalId: new mongoose.Types.ObjectId(GOAL_ID) });
   let recalculated;
-  t.mock.method(Task, 'findOneAndDelete', async () => doc);
-  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId) => {
+  t.mock.method(Task, 'findOneAndDelete', async (query, options) => {
+    assert.equal(options.session, session);
+    assert.equal(query._id.toString(), TASK_ID);
+    assert.equal(query.userId.toString(), USER_ID);
+    return doc;
+  });
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, goalSession) => {
+    assert.equal(goalSession, session);
     recalculated = { goalId, userId };
   });
 
-  await taskService.deleteTask(USER_ID, TASK_ID);
+  const result = await taskService.deleteTask(USER_ID, TASK_ID);
+  assert.deepEqual(result, { _id: TASK_ID, deleted: true });
   assert.deepEqual(recalculated, { goalId: GOAL_ID, userId: USER_ID });
+});
+
+test('Goal recalculation failure rejects the Task deletion transaction', async (t) => {
+  const session = mockTaskTransaction(t);
+  const doc = taskDocument({ goalId: new mongoose.Types.ObjectId(GOAL_ID) });
+  const failure = new Error('Goal update failed after Task deletion');
+  let deletionAttempted = false;
+  t.mock.method(Task, 'findOneAndDelete', async (query, options) => {
+    assert.equal(options.session, session);
+    deletionAttempted = true;
+    return doc;
+  });
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, goalSession) => {
+    assert.equal(deletionAttempted, true);
+    assert.equal(goalSession, session);
+    assert.equal(goalId, GOAL_ID);
+    assert.equal(userId, USER_ID);
+    throw failure;
+  });
+
+  await assert.rejects(taskService.deleteTask(USER_ID, TASK_ID), (error) => error === failure);
+});
+
+test('deleting a Task without a Goal skips progress recalculation', async (t) => {
+  const session = mockTaskTransaction(t);
+  t.mock.method(Task, 'findOneAndDelete', async (query, options) => {
+    assert.equal(options.session, session);
+    return taskDocument();
+  });
+  t.mock.method(goalService, 'recalculateProgress', async () => {
+    assert.fail('An unlinked Task has no Goal to recalculate');
+  });
+
+  const result = await taskService.deleteTask(USER_ID, TASK_ID);
+  assert.deepEqual(result, { _id: TASK_ID, deleted: true });
 });
 
 test('list filtering, sorting, and pagination include owner and exact overdue rules', async (t) => {

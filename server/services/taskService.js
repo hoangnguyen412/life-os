@@ -281,23 +281,25 @@ async function updateTask(userId, taskId, input) {
 }
 
 async function deleteTask(userId, taskId) {
-  const task = await Task.findOneAndDelete({
-    _id: new mongoose.Types.ObjectId(taskId),
-    userId: new mongoose.Types.ObjectId(userId),
+  return mongoose.connection.transaction(async (session) => {
+    const task = await Task.findOneAndDelete({
+      _id: new mongoose.Types.ObjectId(taskId),
+      userId: new mongoose.Types.ObjectId(userId),
+    }, { session });
+
+    if (!task) {
+      throw new AppError(404, 'NOT_FOUND', 'Task not found');
+    }
+
+    if (task.goalId) {
+      await goalService.recalculateProgress(task.goalId.toString(), userId, session);
+    }
+
+    return {
+      _id: task._id.toString(),
+      deleted: true,
+    };
   });
-
-  if (!task) {
-    throw new AppError(404, 'NOT_FOUND', 'Task not found');
-  }
-
-  if (task.goalId) {
-    await goalService.recalculateProgress(task.goalId.toString(), userId);
-  }
-
-  return {
-    _id: task._id.toString(),
-    deleted: true,
-  };
 }
 
 module.exports = {
