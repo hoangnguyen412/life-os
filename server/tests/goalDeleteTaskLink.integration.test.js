@@ -89,3 +89,62 @@ for (const progressMode of ['manual', 'task_based']) {
     assert.ok(await Goal.exists({ _id: otherGoal._id, userId: otherOwner }));
   });
 }
+
+async function setupReassignment(t) {
+  await connectTestDatabase(t);
+  const owner = new mongoose.Types.ObjectId();
+  const goalA = await goalService.createGoal(owner, { title: 'Source Goal' });
+  const goalB = await goalService.createGoal(owner, {
+    title: 'Destination Goal', progressMode: 'manual', manualProgress: 40,
+  });
+  await taskService.createTask(owner, { title: 'Still to do', goalId: goalA._id });
+  const task = await taskService.createTask(owner, {
+    title: 'Move this Task', goalId: goalA._id, status: 'done',
+  });
+  assert.equal((await Goal.findById(goalA._id)).progress, 50);
+
+  return {
+    goalA,
+    goalB,
+    task,
+    moveTask: () => taskService.updateTask(owner, task._id, {
+      title: task.title, description: null, status: task.status,
+      dueDate: null, goalId: goalB._id, priority: task.priority,
+    }),
+    deleteDestination: () => goalService.deleteGoal(owner, goalB._id),
+  };
+}
+
+test('deleting Goal B before reassignment writes leaves the Task and progress on Goal A', options, async (t) => {
+  const { goalA, goalB, task, moveTask, deleteDestination } = await setupReassignment(t);
+
+  // Take the reassignment snapshot before deleting B, then let the write run.
+  await assert.rejects(
+    interleave(t, Task, 'findOne', moveTask, deleteDestination, { afterCall: true }),
+    { status: 404, code: 'NOT_FOUND' },
+  );
+
+  assert.equal(await Goal.exists({ _id: goalB._id }), null);
+  assert.equal(await Task.countDocuments({ goalId: goalB._id }), 0);
+  assert.equal((await Task.findById(task._id)).goalId.toString(), goalA._id);
+  assert.equal((await Goal.findById(goalA._id)).progress, 50);
+});
+
+test('reassignment before Goal B deletion preserves the Task and recalculates Goal A', options, async (t) => {
+  const { goalA, goalB, task, moveTask, deleteDestination } = await setupReassignment(t);
+
+  await interleave(t, Goal, 'deleteOne', deleteDestination, async () => {
+    const moved = await moveTask();
+    assert.equal(moved.goalId, goalB._id);
+    assert.equal((await Goal.findById(goalA._id)).progress, 0);
+    assert.equal((await Goal.findById(goalB._id)).progress, 40);
+  });
+
+  assert.equal(await Goal.exists({ _id: goalB._id }), null);
+  assert.equal(await Task.countDocuments({ goalId: goalB._id }), 0);
+  const saved = await Task.findById(task._id);
+  assert.equal(saved.goalId, null);
+  assert.equal(saved.status, 'done');
+  assert.equal(saved.completedAt.toISOString(), task.completedAt);
+  assert.equal((await Goal.findById(goalA._id)).progress, 0);
+});
