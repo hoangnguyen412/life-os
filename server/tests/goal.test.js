@@ -258,6 +258,14 @@ test('Goal detail and update queries are user-scoped and update only editable fi
 
 test('foreign Goal reads, updates, patches, and deletes return NOT_FOUND', async (t) => {
   const queries = [];
+  const session = {};
+  t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
+  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
+    assert.equal(options.session, session);
+    queries.push(filter);
+    return null;
+  });
+  t.mock.method(Task, 'updateMany', async () => { assert.fail('missing Goal must not unlink Tasks'); });
   t.mock.method(Goal, 'findOne', async (filter) => { queries.push(filter); return null; });
 
   await assert.rejects(goalService.getGoal(USER_ID, GOAL_ID), (error) => error.status === 404);
@@ -408,11 +416,31 @@ test('PUT switching to manual copies current task progress; switching back recal
 
 test('deleting a Goal unlinks only this user’s Tasks and preserves the Task records', async (t) => {
   const goal = goalDocument();
+  const session = {};
+  const calls = [];
   let taskUpdate;
   let goalDelete;
-  t.mock.method(Goal, 'findOne', async () => goal);
-  t.mock.method(Task, 'updateMany', async (...args) => { taskUpdate = args; return { modifiedCount: 2 }; });
-  t.mock.method(Goal, 'deleteOne', async (filter) => { goalDelete = filter; return { deletedCount: 1 }; });
+  t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
+  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
+    assert.equal(filter._id.toString(), GOAL_ID);
+    assert.equal(filter.userId.toString(), USER_ID);
+    assert.deepEqual(update, { $inc: { taskRevision: 1 } });
+    assert.equal(options.session, session);
+    calls.push('write Goal');
+    return goal;
+  });
+  t.mock.method(Task, 'updateMany', async (...args) => {
+    taskUpdate = args;
+    assert.equal(args[2].session, session);
+    calls.push('unlink Tasks');
+    return { modifiedCount: 2 };
+  });
+  t.mock.method(Goal, 'deleteOne', async (filter, options) => {
+    goalDelete = filter;
+    assert.equal(options.session, session);
+    calls.push('delete Goal');
+    return { deletedCount: 1 };
+  });
 
   const result = await goalService.deleteGoal(USER_ID, GOAL_ID);
   assert.deepEqual(taskUpdate[0], {
@@ -422,6 +450,44 @@ test('deleting a Goal unlinks only this user’s Tasks and preserves the Task re
   assert.deepEqual(taskUpdate[1], { $set: { goalId: null } });
   assert.equal(goalDelete.userId.toString(), USER_ID);
   assert.deepEqual(result, { _id: GOAL_ID, deleted: true });
+  assert.deepEqual(calls, ['write Goal', 'unlink Tasks', 'delete Goal']);
+});
+
+test('Goal deletion errors reject the transaction at each write stage', async (t) => {
+  for (const stage of ['write Goal', 'unlink Tasks', 'delete Goal', 'missing deletion']) {
+    await t.test(stage, async (t) => {
+      const session = {};
+      const failure = new Error(`${stage} failed`);
+      const calls = [];
+      t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
+      t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
+        assert.equal(options.session, session);
+        calls.push('write Goal');
+        if (stage === 'write Goal') throw failure;
+        return goalDocument();
+      });
+      t.mock.method(Task, 'updateMany', async (filter, update, options) => {
+        assert.equal(options.session, session);
+        calls.push('unlink Tasks');
+        if (stage === 'unlink Tasks') throw failure;
+        return { modifiedCount: 0 };
+      });
+      t.mock.method(Goal, 'deleteOne', async (filter, options) => {
+        assert.equal(options.session, session);
+        calls.push('delete Goal');
+        if (stage === 'delete Goal') throw failure;
+        return { deletedCount: 0 };
+      });
+
+      await assert.rejects(
+        goalService.deleteGoal(USER_ID, GOAL_ID),
+        (error) => stage === 'missing deletion' ? error.status === 404 : error === failure,
+      );
+      const expected = ['write Goal', 'unlink Tasks', 'delete Goal'];
+      const lastStage = stage === 'missing deletion' ? 'delete Goal' : stage;
+      assert.deepEqual(calls, expected.slice(0, expected.indexOf(lastStage) + 1));
+    });
+  }
 });
 
 test('OpenAPI documents all Goal operations and the documented manualProgress field', () => {

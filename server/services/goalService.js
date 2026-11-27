@@ -163,20 +163,31 @@ async function updateManualProgress(userId, goalId, manualProgress) {
 }
 
 async function deleteGoal(userId, goalId) {
-  const goal = await findOwnedGoal(userId, goalId);
-  await Task.updateMany(
-    { goalId: goal._id, userId: new mongoose.Types.ObjectId(userId) },
-    { $set: { goalId: null } },
-  );
-  const deletion = await Goal.deleteOne({
-    _id: goal._id,
-    userId: new mongoose.Types.ObjectId(userId),
-  });
-  if (deletion.deletedCount === 0) {
-    throw new AppError(404, 'NOT_FOUND', 'Goal not found');
-  }
+  return mongoose.connection.transaction(async (session) => {
+    const filter = {
+      _id: new mongoose.Types.ObjectId(goalId),
+      userId: new mongoose.Types.ObjectId(userId),
+    };
+    // Coordinate with linked Task transactions before clearing their Goal references.
+    const goal = await Goal.findOneAndUpdate(
+      filter,
+      { $inc: { taskRevision: 1 } },
+      { session, new: true },
+    );
+    if (!goal) throw new AppError(404, 'NOT_FOUND', 'Goal not found');
 
-  return { _id: goal._id.toString(), deleted: true };
+    await Task.updateMany(
+      { goalId: goal._id, userId: new mongoose.Types.ObjectId(userId) },
+      { $set: { goalId: null } },
+      { session },
+    );
+    const deletion = await Goal.deleteOne(filter, { session });
+    if (deletion.deletedCount === 0) {
+      throw new AppError(404, 'NOT_FOUND', 'Goal not found');
+    }
+
+    return { _id: goal._id.toString(), deleted: true };
+  });
 }
 
 module.exports = {
