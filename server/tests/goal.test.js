@@ -257,6 +257,7 @@ test('Goal detail and update queries are user-scoped and update only editable fi
 });
 
 test('foreign Goal reads, updates, patches, and deletes return NOT_FOUND', async (t) => {
+  t.mock.method(Goal.db, 'transaction', async (work) => work({}));
   const queries = [];
   t.mock.method(Goal, 'findOne', async (filter) => { queries.push(filter); return null; });
 
@@ -351,12 +352,21 @@ test('PUT switching to manual copies current task progress; switching back recal
 });
 
 test('deleting a Goal unlinks only this user’s Tasks and preserves the Task records', async (t) => {
+  const session = {};
+  t.mock.method(Goal.db, 'transaction', async (work) => work(session));
   const goal = goalDocument();
   let taskUpdate;
   let goalDelete;
-  t.mock.method(Goal, 'findOne', async () => goal);
+  t.mock.method(Goal, 'findOne', async (_filter, _projection, options) => {
+    assert.equal(options.session, session);
+    return goal;
+  });
   t.mock.method(Task, 'updateMany', async (...args) => { taskUpdate = args; return { modifiedCount: 2 }; });
-  t.mock.method(Goal, 'deleteOne', async (filter) => { goalDelete = filter; return { deletedCount: 1 }; });
+  t.mock.method(Goal, 'deleteOne', async (filter, options) => {
+    goalDelete = filter;
+    assert.equal(options.session, session);
+    return { deletedCount: 1 };
+  });
 
   const result = await goalService.deleteGoal(USER_ID, GOAL_ID);
   assert.deepEqual(taskUpdate[0], {
@@ -364,6 +374,7 @@ test('deleting a Goal unlinks only this user’s Tasks and preserves the Task re
     userId: new mongoose.Types.ObjectId(USER_ID),
   });
   assert.deepEqual(taskUpdate[1], { $set: { goalId: null } });
+  assert.equal(taskUpdate[2].session, session);
   assert.equal(goalDelete.userId.toString(), USER_ID);
   assert.deepEqual(result, { _id: GOAL_ID, deleted: true });
 });

@@ -112,11 +112,11 @@ async function createGoal(userId, input) {
   return serializeGoal(currentGoal);
 }
 
-async function findOwnedGoal(userId, goalId) {
+async function findOwnedGoal(userId, goalId, session) {
   const goal = await Goal.findOne({
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  });
+  }, null, session ? { session } : undefined);
   if (!goal) throw new AppError(404, 'NOT_FOUND', 'Goal not found');
   return goal;
 }
@@ -162,20 +162,21 @@ async function updateManualProgress(userId, goalId, manualProgress) {
 }
 
 async function deleteGoal(userId, goalId) {
-  const goal = await findOwnedGoal(userId, goalId);
-  await Task.updateMany(
-    { goalId: goal._id, userId: new mongoose.Types.ObjectId(userId) },
-    { $set: { goalId: null } },
-  );
-  const deletion = await Goal.deleteOne({
-    _id: goal._id,
-    userId: new mongoose.Types.ObjectId(userId),
-  });
-  if (deletion.deletedCount === 0) {
-    throw new AppError(404, 'NOT_FOUND', 'Goal not found');
-  }
+  return Goal.db.transaction(async (session) => {
+    const goal = await findOwnedGoal(userId, goalId, session);
+    const ownerId = new mongoose.Types.ObjectId(userId);
+    await Task.updateMany(
+      { goalId: goal._id, userId: ownerId },
+      { $set: { goalId: null } },
+      { session },
+    );
+    const deletion = await Goal.deleteOne({ _id: goal._id, userId: ownerId }, { session });
+    if (deletion.deletedCount === 0) {
+      throw new AppError(404, 'NOT_FOUND', 'Goal not found');
+    }
 
-  return { _id: goal._id.toString(), deleted: true };
+    return { _id: goal._id.toString(), deleted: true };
+  });
 }
 
 module.exports = {
