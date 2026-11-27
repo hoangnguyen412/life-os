@@ -263,6 +263,7 @@ test('Goal save failure rejects the Task creation transaction and all queries sh
 });
 
 test('updating a Task rejects a Goal that belongs to another user', async (t) => {
+  mockTaskTransaction(t);
   const doc = taskDocument();
   let saved = false;
   let goalQuery;
@@ -324,6 +325,7 @@ test('manual Goal progress is preserved and controls completed status', async (t
 });
 
 test('get, update, and delete queries are scoped by the authenticated user', async (t) => {
+  mockTaskTransaction(t);
   const queries = [];
   const doc = taskDocument({ title: 'Before' });
   t.mock.method(Task, 'findOne', async (query) => { queries.push(query); return doc; });
@@ -357,6 +359,7 @@ test('foreign Task reads and deletes return NOT_FOUND', async (t) => {
 });
 
 test('updating to done sets completedAt, remaining done preserves it, and leaving done clears it', async (t) => {
+  mockTaskTransaction(t);
   const completedAt = new Date('2026-10-18T10:00:00.000Z');
   const doc = taskDocument({ status: 'in_progress', completedAt: null });
   t.mock.method(Task, 'findOne', async () => doc);
@@ -376,6 +379,7 @@ test('updating to done sets completedAt, remaining done preserves it, and leavin
 });
 
 test('changing a linked Task status or Goal recalculates each affected Goal once', async (t) => {
+  const session = mockTaskTransaction(t);
   const oldGoalId = '64f000000000000000000031';
   const newGoalId = '64f000000000000000000032';
   const doc = taskDocument({
@@ -383,9 +387,20 @@ test('changing a linked Task status or Goal recalculates each affected Goal once
     goalId: new mongoose.Types.ObjectId(oldGoalId),
   });
   const recalculated = [];
-  t.mock.method(Task, 'findOne', async () => doc);
-  t.mock.method(Goal, 'exists', async () => ({ _id: newGoalId }));
-  t.mock.method(goalService, 'recalculateProgress', async (goalId) => { recalculated.push(goalId); });
+  t.mock.method(Task, 'findOne', async (filter, projection, options) => {
+    assert.equal(options.session, session);
+    return doc;
+  });
+  doc.save = async (options) => { assert.equal(options.session, session); };
+  t.mock.method(Goal, 'exists', async (filter, options) => {
+    assert.equal(options.session, session);
+    return { _id: newGoalId };
+  });
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, goalSession) => {
+    assert.equal(goalSession, session);
+    assert.equal(userId, USER_ID);
+    recalculated.push(goalId);
+  });
 
   await taskService.updateTask(USER_ID, TASK_ID, {
     title: 'Task', description: null, status: 'done', dueDate: null,
@@ -393,6 +408,62 @@ test('changing a linked Task status or Goal recalculates each affected Goal once
   });
 
   assert.deepEqual(recalculated.sort(), [oldGoalId, newGoalId].sort());
+});
+
+test('updating a missing Task rejects the transaction before saving', async (t) => {
+  const session = mockTaskTransaction(t);
+  t.mock.method(Task, 'findOne', async (filter, projection, options) => {
+    assert.equal(options.session, session);
+    assert.equal(filter.userId.toString(), USER_ID);
+    return null;
+  });
+  t.mock.method(goalService, 'recalculateProgress', async () => {
+    assert.fail('a missing Task must not update Goal progress');
+  });
+
+  await assert.rejects(
+    taskService.updateTask(USER_ID, TASK_ID, {
+      title: 'Missing', description: null, status: 'todo',
+      dueDate: null, goalId: null, priority: 'medium',
+    }),
+    (error) => error.status === 404,
+  );
+});
+
+test('failure updating the destination Goal rejects the whole Task update transaction', async (t) => {
+  const session = mockTaskTransaction(t);
+  const oldGoalId = GOAL_ID;
+  const newGoalId = '64f000000000000000000032';
+  const doc = taskDocument({ goalId: new mongoose.Types.ObjectId(oldGoalId) });
+  const failure = new Error('Destination Goal save failed');
+  const writes = [];
+  t.mock.method(Task, 'findOne', async (filter, projection, options) => {
+    assert.equal(options.session, session);
+    return doc;
+  });
+  t.mock.method(Goal, 'exists', async (filter, options) => {
+    assert.equal(options.session, session);
+    return { _id: newGoalId };
+  });
+  doc.save = async (options) => {
+    assert.equal(options.session, session);
+    writes.push('task');
+  };
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, goalSession) => {
+    assert.equal(goalSession, session);
+    assert.equal(userId, USER_ID);
+    writes.push(goalId);
+    if (goalId === newGoalId) throw failure;
+  });
+
+  await assert.rejects(
+    taskService.updateTask(USER_ID, TASK_ID, {
+      title: 'Moved', description: null, status: 'done',
+      dueDate: null, goalId: newGoalId, priority: 'medium',
+    }),
+    (error) => error === failure,
+  );
+  assert.deepEqual(writes, ['task', oldGoalId, newGoalId]);
 });
 
 test('deleting a linked Task recalculates its Goal', async (t) => {
