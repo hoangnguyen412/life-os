@@ -68,7 +68,14 @@ The HTTP status and envelope must agree. `field`, when present, uses the exact A
 | 401 | `UNAUTHORIZED` | Missing/invalid/expired JWT or invalid login credentials |
 | 404 | `NOT_FOUND` | Resource does not exist or belongs to another user |
 | 409 | `CONFLICT` | Duplicate email during registration |
+| 429 | `RATE_LIMITED` | Too many authentication attempts; `error.retryAfter` and the `Retry-After` header contain seconds until retry |
 | 500 | `SERVER_ERROR` | Unexpected server error; do not expose internal details |
+
+### Authentication rate limits
+
+Authentication limits are separate per client IP: 20 unsuccessful login requests and 10 registration requests per 15 minutes. Successful login requests do not count toward the login limit. The counters are stored in memory, reset when the server restarts, and are not shared across instances. A deployment with multiple instances needs a shared rate-limit store.
+
+For a deployment behind one trusted proxy hop (such as the intended Render setup), set `TRUST_PROXY=1` in the backend environment so Express uses the forwarded client IP. Keep `TRUST_PROXY=0` locally. Verify the deployment's proxy path before enabling this setting; a different number of proxy hops needs a matching trust configuration.
 
 ## 3. Date and optional-field rules
 

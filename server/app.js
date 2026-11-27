@@ -11,6 +11,8 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
+// Enable only when the API is behind a single trusted reverse proxy.
+app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false);
 const openApiPath = path.resolve(__dirname, '..', 'docs', 'openapi.yaml');
 const openApiDocument = YAML.parse(require('node:fs').readFileSync(openApiPath, 'utf8'));
 
