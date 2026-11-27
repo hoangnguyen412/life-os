@@ -24,6 +24,12 @@ const GOAL_ID = '64f000000000000000000021';
 const JWT_SECRET = 'task-test-secret-with-at-least-32-characters';
 process.env.JWT_SECRET = JWT_SECRET;
 
+function mockTaskTransaction(t) {
+  const session = {};
+  t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
+  return session;
+}
+
 function taskDocument(overrides = {}) {
   const now = new Date('2026-10-20T10:00:00.000Z');
   return {
@@ -130,10 +136,12 @@ test('Task list validation applies defaults and rejects invalid filters and pagi
 });
 
 test('create uses authenticated owner, defaults, timestamps, and ignores client userId', async (t) => {
+  const session = mockTaskTransaction(t);
   let persisted;
-  t.mock.method(Task, 'create', async (fields) => {
+  t.mock.method(Task, 'create', async ([fields], options) => {
+    assert.equal(options.session, session);
     persisted = fields;
-    return taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() });
+    return [taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() })];
   });
   const result = await taskService.createTask(USER_ID, {
     title: ' New task ', userId: OTHER_USER_ID,
@@ -151,10 +159,11 @@ test('create uses authenticated owner, defaults, timestamps, and ignores client 
 });
 
 test('creating a done Task sets completedAt', async (t) => {
+  mockTaskTransaction(t);
   let persisted;
-  t.mock.method(Task, 'create', async (fields) => {
+  t.mock.method(Task, 'create', async ([fields]) => {
     persisted = fields;
-    return taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() });
+    return [taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() })];
   });
   const before = Date.now();
   const result = await taskService.createTask(USER_ID, { title: 'Done', status: 'done' });
@@ -163,9 +172,14 @@ test('creating a done Task sets completedAt', async (t) => {
 });
 
 test('create rejects a Goal that is missing or belongs to another user', async (t) => {
+  const session = mockTaskTransaction(t);
   let goalQuery;
   let taskCreated = false;
-  t.mock.method(Goal, 'exists', async (query) => { goalQuery = query; return null; });
+  t.mock.method(Goal, 'exists', async (query, options) => {
+    assert.equal(options.session, session);
+    goalQuery = query;
+    return null;
+  });
   t.mock.method(Task, 'create', async () => { taskCreated = true; });
 
   await assert.rejects(
@@ -178,23 +192,74 @@ test('create rejects a Goal that is missing or belongs to another user', async (
 });
 
 test('creating a Task with an owned Goal recalculates its progress', async (t) => {
+  const session = mockTaskTransaction(t);
   let recalculated;
-  t.mock.method(Goal, 'exists', async (query) => {
+  t.mock.method(Goal, 'exists', async (query, options) => {
+    assert.equal(options.session, session);
     assert.equal(query.userId.toString(), USER_ID);
     return { _id: new mongoose.Types.ObjectId(GOAL_ID) };
   });
-  t.mock.method(Task, 'create', async (input) => taskDocument({
-    ...input,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }));
-  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId) => {
+  t.mock.method(Task, 'create', async ([input], options) => {
+    assert.equal(options.session, session);
+    return [taskDocument({
+      ...input,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })];
+  });
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, optionsSession) => {
+    assert.equal(optionsSession, session);
     recalculated = { goalId, userId };
   });
 
   const created = await taskService.createTask(USER_ID, { title: 'Linked', goalId: GOAL_ID });
   assert.equal(created.goalId, GOAL_ID);
   assert.deepEqual(recalculated, { goalId: GOAL_ID, userId: USER_ID });
+});
+
+test('Goal save failure rejects the Task creation transaction and all queries share its session', async (t) => {
+  const session = mockTaskTransaction(t);
+  const failure = new Error('Goal save failed');
+  let taskCreated = false;
+  let goalSaved = false;
+  let countInProgress = false;
+  t.mock.method(Goal, 'exists', async (filter, options) => {
+    assert.equal(options.session, session);
+    return { _id: new mongoose.Types.ObjectId(GOAL_ID) };
+  });
+  t.mock.method(Task, 'create', async ([fields], options) => {
+    assert.equal(options.session, session);
+    taskCreated = true;
+    return [taskDocument(fields)];
+  });
+  t.mock.method(Goal, 'findOne', async (filter, projection, options) => {
+    assert.equal(options.session, session);
+    assert.equal(taskCreated, true);
+    return {
+      _id: new mongoose.Types.ObjectId(GOAL_ID),
+      progressMode: 'task_based',
+      async save(saveOptions) {
+        assert.equal(saveOptions.session, session);
+        assert.equal(this.progress, 0);
+        goalSaved = true;
+        throw failure;
+      },
+    };
+  });
+  t.mock.method(Task, 'countDocuments', async (filter, options) => {
+    assert.equal(options.session, session);
+    assert.equal(countInProgress, false, 'transaction queries must run sequentially');
+    countInProgress = true;
+    await Promise.resolve();
+    countInProgress = false;
+    return filter.status === 'done' ? 0 : 1;
+  });
+
+  await assert.rejects(
+    taskService.createTask(USER_ID, { title: 'Linked', goalId: GOAL_ID }),
+    (error) => error === failure,
+  );
+  assert.equal(goalSaved, true);
 });
 
 test('updating a Task rejects a Goal that belongs to another user', async (t) => {

@@ -174,13 +174,13 @@ async function listTasks(userId, query) {
   };
 }
 
-async function assertGoalBelongsToUser(goalId, userId) {
+async function assertGoalBelongsToUser(goalId, userId, session) {
   if (goalId === null || goalId === undefined) return;
 
   const goal = await Goal.exists({
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  });
+  }, { session });
 
   if (!goal) {
     throw new AppError(404, 'NOT_FOUND', 'Goal not found for this user');
@@ -197,19 +197,21 @@ async function createTask(userId, input) {
     priority: input.priority ?? 'medium',
   };
 
-  await assertGoalBelongsToUser(fields.goalId, userId);
+  return mongoose.connection.transaction(async (session) => {
+    await assertGoalBelongsToUser(fields.goalId, userId, session);
 
-  const task = await Task.create({
-    ...fields,
-    userId: new mongoose.Types.ObjectId(userId),
-    completedAt: fields.status === 'done' ? new Date() : null,
+    const [task] = await Task.create([{
+      ...fields,
+      userId: new mongoose.Types.ObjectId(userId),
+      completedAt: fields.status === 'done' ? new Date() : null,
+    }], { session });
+
+    if (fields.goalId) {
+      await goalService.recalculateProgress(fields.goalId, userId, session);
+    }
+
+    return serializeTask(task);
   });
-
-  if (fields.goalId) {
-    await goalService.recalculateProgress(fields.goalId, userId);
-  }
-
-  return serializeTask(task);
 }
 
 async function getTask(userId, taskId) {

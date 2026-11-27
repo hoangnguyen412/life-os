@@ -31,16 +31,15 @@ function parsePagination(query) {
   return { page, limit };
 }
 
-async function calculateProgress(goal, userId) {
+async function calculateProgress(goal, userId, session) {
   if (goal.progressMode === 'task_based') {
     const taskFilter = {
       goalId: goal._id,
       userId: new mongoose.Types.ObjectId(userId),
     };
-    const [total, completed] = await Promise.all([
-      Task.countDocuments(taskFilter),
-      Task.countDocuments({ ...taskFilter, status: 'done' }),
-    ]);
+    // Transaction operations run sequentially on the same session.
+    const total = await Task.countDocuments(taskFilter, { session });
+    const completed = await Task.countDocuments({ ...taskFilter, status: 'done' }, { session });
     goal.progress = total === 0 ? 0 : Math.round((completed / total) * 100);
     // Rounding must not show full completion while unfinished Tasks remain.
     if (completed < total) {
@@ -55,15 +54,15 @@ async function calculateProgress(goal, userId) {
   return goal;
 }
 
-async function recalculateProgress(goalId, userId) {
+async function recalculateProgress(goalId, userId, session) {
   const goal = await Goal.findOne({
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  });
+  }, null, { session });
   if (!goal) return null;
 
-  await calculateProgress(goal, userId);
-  await goal.save();
+  await calculateProgress(goal, userId, session);
+  await goal.save({ session });
   return goal;
 }
 
