@@ -40,6 +40,10 @@ const goalSchema = new mongoose.Schema({
     enum: ['active', 'completed'],
     default: 'active',
   },
+  taskLinkRevision: {
+    type: Number,
+    select: false,
+  },
 }, {
   timestamps: { createdAt: true, updatedAt: false },
   versionKey: false,
