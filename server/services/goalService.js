@@ -48,12 +48,18 @@ async function calculateProgress(goal, userId, session) {
         Task.countDocuments(taskFilter),
         Task.countDocuments(completedFilter),
       ]);
-    goal.progress = total === 0 ? 0 : Math.round((completed / total) * 100);
+    const allTasksCompleted = total > 0 && completed === total;
+    goal.progress = total === 0
+      ? 0
+      : allTasksCompleted
+        ? 100
+        : Math.min(Math.round((completed / total) * 100), 99);
+    goal.status = allTasksCompleted ? 'completed' : 'active';
   } else {
     goal.progress = goal.manualProgress;
+    goal.status = goal.progress === 100 ? 'completed' : 'active';
   }
 
-  goal.status = goal.progress === 100 ? 'completed' : 'active';
   return goal;
 }
 
