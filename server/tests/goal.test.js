@@ -295,11 +295,11 @@ test('manual PATCH is rejected for task_based Goals', async (t) => {
   assert.equal(saved, false);
 });
 
-test('task_based Goals recalculate to zero with no Tasks and round completed ratios', async (t) => {
+test('task_based Goal progress reflects empty, partial, nearly complete, and complete Task sets', async (t) => {
   const goal = goalDocument();
   const taskFilters = [];
-  let totalTasks = 3;
-  let completedTasks = 2;
+  let totalTasks = 0;
+  let completedTasks = 0;
   t.mock.method(Goal, 'findOne', async (filter) => {
     assert.equal(filter.userId.toString(), USER_ID);
     return goal;
@@ -310,17 +310,29 @@ test('task_based Goals recalculate to zero with no Tasks and round completed rat
   });
 
   await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 67);
+  assert.equal(goal.progress, 0);
   assert.equal(goal.status, 'active');
   assert.ok(taskFilters.every((filter) => filter.userId.toString() === USER_ID));
 
   taskFilters.length = 0;
-  totalTasks = 0;
-  completedTasks = 0;
-  goal.progress = 100;
+  totalTasks = 3;
+  completedTasks = 2;
   await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 0);
+  assert.equal(goal.progress, 67);
   assert.equal(goal.status, 'active');
+
+  taskFilters.length = 0;
+  totalTasks = 200;
+  completedTasks = 199;
+  await goalService.recalculateProgress(GOAL_ID, USER_ID);
+  assert.equal(goal.progress, 99);
+  assert.equal(goal.status, 'active');
+
+  taskFilters.length = 0;
+  completedTasks = 200;
+  await goalService.recalculateProgress(GOAL_ID, USER_ID);
+  assert.equal(goal.progress, 100);
+  assert.equal(goal.status, 'completed');
 });
 
 test('PUT switching to manual copies current task progress; switching back recalculates', async (t) => {
