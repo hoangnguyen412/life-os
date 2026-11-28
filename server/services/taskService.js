@@ -180,15 +180,17 @@ async function listTasks(userId, query) {
   };
 }
 
-async function assertGoalBelongsToUser(goalId, userId, session) {
-  if (goalId === null || goalId === undefined) return;
-
-  const goal = await Goal.exists({
+async function validateTaskGoal(goalId, userId, session, linking) {
+  const filter = {
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  }, { session });
+  };
+  // Linking must conflict with Goal deletion even if progress does not change.
+  const found = linking
+    ? (await Goal.updateOne(filter, { $inc: { taskLinkRevision: 1 } }, { session })).matchedCount === 1
+    : await Goal.exists(filter, { session });
 
-  if (!goal) {
+  if (!found) {
     throw new AppError(404, 'NOT_FOUND', 'Goal not found for this user');
   }
 }
@@ -203,19 +205,19 @@ async function createTask(userId, input) {
     priority: input.priority ?? 'medium',
   };
 
-  return mongoose.connection.transaction(async (session) => {
-    await assertGoalBelongsToUser(fields.goalId, userId, session);
+  const taskFields = {
+    ...fields,
+    userId: new mongoose.Types.ObjectId(userId),
+    completedAt: fields.status === 'done' ? new Date() : null,
+  };
+  if (!fields.goalId) {
+    return serializeTask(await Task.create(taskFields));
+  }
 
-    const [task] = await Task.create([{
-      ...fields,
-      userId: new mongoose.Types.ObjectId(userId),
-      completedAt: fields.status === 'done' ? new Date() : null,
-    }], { session });
-
-    if (fields.goalId) {
-      await goalService.recalculateProgress(fields.goalId, userId, session);
-    }
-
+  return Task.db.transaction(async (session) => {
+    await validateTaskGoal(fields.goalId, userId, session, true);
+    const [task] = await Task.create([taskFields], { session });
+    await goalService.recalculateProgress(fields.goalId, userId, session);
     return serializeTask(task);
   });
 }
@@ -234,56 +236,59 @@ async function getTask(userId, taskId) {
 }
 
 async function updateTask(userId, taskId, input) {
-  return mongoose.connection.transaction(async (session) => {
-    const task = await Task.findOne({
-      _id: new mongoose.Types.ObjectId(taskId),
-      userId: new mongoose.Types.ObjectId(userId),
-    }, null, { session });
+  return Task.db.transaction((session) => saveTaskUpdate(userId, taskId, input, session));
+}
 
-    if (!task) {
-      throw new AppError(404, 'NOT_FOUND', 'Task not found');
-    }
+async function saveTaskUpdate(userId, taskId, input, session) {
+  const task = await Task.findOne({
+    _id: new mongoose.Types.ObjectId(taskId),
+    userId: new mongoose.Types.ObjectId(userId),
+  }, null, session ? { session } : undefined);
 
-    const nextStatus = input.status;
-    const nextGoalId = input.goalId ?? null;
+  if (!task) {
+    throw new AppError(404, 'NOT_FOUND', 'Task not found');
+  }
 
-    await assertGoalBelongsToUser(nextGoalId, userId, session);
+  const nextStatus = input.status;
+  const nextGoalId = input.goalId == null ? null : new mongoose.Types.ObjectId(input.goalId);
+  const previousStatus = task.status;
+  const wasDone = previousStatus === 'done';
+  const previousGoalId = task.goalId ? task.goalId.toString() : null;
+  const currentGoalId = nextGoalId ? nextGoalId.toString() : null;
+  const goalChanged = previousGoalId !== currentGoalId;
 
-    const previousStatus = task.status;
-    const wasDone = previousStatus === 'done';
-    const previousGoalId = task.goalId ? task.goalId.toString() : null;
+  if (nextGoalId) {
+    await validateTaskGoal(nextGoalId, userId, session, goalChanged);
+  }
 
-    Object.assign(task, {
-      title: input.title.trim(),
-      description: input.description == null ? null : input.description.trim(),
-      status: nextStatus,
-      dueDate: input.dueDate ?? null,
-      goalId: nextGoalId,
-      priority: input.priority,
-      completedAt: nextStatus === 'done'
-        ? (wasDone ? task.completedAt : new Date())
-        : null,
-    });
-
-    await task.save({ session });
-
-    const statusChanged = previousStatus !== nextStatus;
-    const currentGoalId = task.goalId ? task.goalId.toString() : null;
-    const goalChanged = previousGoalId !== currentGoalId;
-
-    if (statusChanged || goalChanged) {
-      const affectedGoalIds = new Set();
-
-      if (previousGoalId) affectedGoalIds.add(previousGoalId);
-      if (currentGoalId) affectedGoalIds.add(currentGoalId);
-
-      for (const goalId of affectedGoalIds) {
-        await goalService.recalculateProgress(goalId, userId, session);
-      }
-    }
-
-    return serializeTask(task);
+  Object.assign(task, {
+    title: input.title.trim(),
+    description: input.description == null ? null : input.description.trim(),
+    status: nextStatus,
+    dueDate: input.dueDate ?? null,
+    goalId: nextGoalId,
+    priority: input.priority,
+    completedAt: nextStatus === 'done'
+      ? (wasDone ? task.completedAt : new Date())
+      : null,
   });
+
+  await task.save(session ? { session } : undefined);
+
+  const statusChanged = previousStatus !== nextStatus;
+
+  if (statusChanged || goalChanged) {
+    const affectedGoalIds = new Set();
+
+    if (previousGoalId) affectedGoalIds.add(previousGoalId);
+    if (currentGoalId) affectedGoalIds.add(currentGoalId);
+
+    for (const goalId of affectedGoalIds) {
+      await goalService.recalculateProgress(goalId, userId, session);
+    }
+  }
+
+  return serializeTask(task);
 }
 
 async function deleteTask(userId, taskId) {

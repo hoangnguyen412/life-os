@@ -60,7 +60,7 @@ async function interleave(t, model, method, start, during, { afterCall = false }
 }
 
 for (const progressMode of ['manual', 'task_based']) {
-  test(`deleting a ${progressMode} Goal unlinks a Task created before deletion acquires its Goal write`, options, async (t) => {
+  test(`deleting a ${progressMode} Goal unlinks a Task created after the unlink query`, options, async (t) => {
     await connectTestDatabase(t);
     const owner = new mongoose.Types.ObjectId();
     const otherOwner = new mongoose.Types.ObjectId();
@@ -71,8 +71,8 @@ for (const progressMode of ['manual', 'task_based']) {
     const otherGoal = await Goal.create({ userId: otherOwner, title: 'Other Goal' });
     const otherTask = await Task.create({ userId: otherOwner, goalId: otherGoal._id, title: 'Other Task' });
 
-    // Pause before the Goal write: a linked Task cannot commit while deletion holds that write.
-    const created = await interleave(t, Goal, 'findOneAndUpdate',
+    // Deletion has already run updateMany when it reaches deleteOne.
+    const created = await interleave(t, Goal, 'deleteOne',
       () => goalService.deleteGoal(owner, goal._id),
       async () => {
         const task = await taskService.createTask(owner, { title: 'New Task', goalId: goal._id });
@@ -133,7 +133,7 @@ test('deleting Goal B before reassignment writes leaves the Task and progress on
 test('reassignment before Goal B deletion preserves the Task and recalculates Goal A', options, async (t) => {
   const { goalA, goalB, task, moveTask, deleteDestination } = await setupReassignment(t);
 
-  await interleave(t, Goal, 'findOneAndUpdate', deleteDestination, async () => {
+  await interleave(t, Goal, 'deleteOne', deleteDestination, async () => {
     const moved = await moveTask();
     assert.equal(moved.goalId, goalB._id);
     assert.equal((await Goal.findById(goalA._id)).progress, 0);

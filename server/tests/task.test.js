@@ -181,12 +181,10 @@ test('deadline range reaches the database with inclusive start, exclusive end an
 });
 
 test('create uses authenticated owner, defaults, timestamps, and ignores client userId', async (t) => {
-  const session = mockTaskTransaction(t);
   let persisted;
-  t.mock.method(Task, 'create', async ([fields], options) => {
-    assert.equal(options.session, session);
+  t.mock.method(Task, 'create', async (fields) => {
     persisted = fields;
-    return [taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() })];
+    return taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() });
   });
   const result = await taskService.createTask(USER_ID, {
     title: ' New task ', userId: OTHER_USER_ID,
@@ -204,11 +202,10 @@ test('create uses authenticated owner, defaults, timestamps, and ignores client 
 });
 
 test('creating a done Task sets completedAt', async (t) => {
-  mockTaskTransaction(t);
   let persisted;
-  t.mock.method(Task, 'create', async ([fields]) => {
+  t.mock.method(Task, 'create', async (fields) => {
     persisted = fields;
-    return [taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() })];
+    return taskDocument({ ...fields, createdAt: new Date(), updatedAt: new Date() });
   });
   const before = Date.now();
   const result = await taskService.createTask(USER_ID, { title: 'Done', status: 'done' });
@@ -217,13 +214,13 @@ test('creating a done Task sets completedAt', async (t) => {
 });
 
 test('create rejects a Goal that is missing or belongs to another user', async (t) => {
-  const session = mockTaskTransaction(t);
+  const session = {};
+  t.mock.method(Task.db, 'transaction', async (work) => work(session));
   let goalQuery;
   let taskCreated = false;
-  t.mock.method(Goal, 'exists', async (query, options) => {
-    assert.equal(options.session, session);
+  t.mock.method(Goal, 'updateOne', async (query) => {
     goalQuery = query;
-    return null;
+    return { matchedCount: 0 };
   });
   t.mock.method(Task, 'create', async () => { taskCreated = true; });
 
@@ -237,29 +234,27 @@ test('create rejects a Goal that is missing or belongs to another user', async (
 });
 
 test('creating a Task with an owned Goal recalculates its progress', async (t) => {
-  const session = mockTaskTransaction(t);
+  const session = {};
+  t.mock.method(Task.db, 'transaction', async (work) => work(session));
   let recalculated;
-  t.mock.method(Goal, 'exists', async (query, options) => {
-    assert.equal(options.session, session);
+  t.mock.method(Goal, 'updateOne', async (query, update, options) => {
     assert.equal(query.userId.toString(), USER_ID);
-    return { _id: new mongoose.Types.ObjectId(GOAL_ID) };
+    assert.equal(query._id.toString(), GOAL_ID);
+    assert.deepEqual(update, { $inc: { taskLinkRevision: 1 } });
+    assert.equal(options.session, session);
+    return { matchedCount: 1 };
   });
   t.mock.method(Task, 'create', async ([input], options) => {
     assert.equal(options.session, session);
-    return [taskDocument({
-      ...input,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })];
+    return [taskDocument({ ...input, createdAt: new Date(), updatedAt: new Date() })];
   });
-  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, optionsSession) => {
-    assert.equal(optionsSession, session);
-    recalculated = { goalId, userId };
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, progressSession) => {
+    recalculated = { goalId, userId, session: progressSession };
   });
 
   const created = await taskService.createTask(USER_ID, { title: 'Linked', goalId: GOAL_ID });
   assert.equal(created.goalId, GOAL_ID);
-  assert.deepEqual(recalculated, { goalId: GOAL_ID, userId: USER_ID });
+  assert.deepEqual(recalculated, { goalId: GOAL_ID, userId: USER_ID, session });
 });
 
 test('Goal save failure rejects the Task creation transaction and all queries share its session', async (t) => {
@@ -268,19 +263,17 @@ test('Goal save failure rejects the Task creation transaction and all queries sh
   let taskCreated = false;
   let goalSaved = false;
   let countInProgress = false;
-  t.mock.method(Goal, 'exists', async (filter, options) => {
+  t.mock.method(Goal, 'updateOne', async (filter, update, options) => {
     assert.equal(options.session, session);
-    return { _id: new mongoose.Types.ObjectId(GOAL_ID) };
+    return { matchedCount: 1 };
   });
   t.mock.method(Task, 'create', async ([fields], options) => {
     assert.equal(options.session, session);
     taskCreated = true;
     return [taskDocument(fields)];
   });
-  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
+  t.mock.method(Goal, 'findOne', async (filter, projection, options) => {
     assert.equal(options.session, session);
-    assert.deepEqual(update, { $inc: { taskRevision: 1 } });
-    assert.equal(options.new, true);
     assert.equal(taskCreated, true);
     return {
       _id: new mongoose.Types.ObjectId(GOAL_ID),
@@ -310,13 +303,16 @@ test('Goal save failure rejects the Task creation transaction and all queries sh
 });
 
 test('updating a Task rejects a Goal that belongs to another user', async (t) => {
-  mockTaskTransaction(t);
+  t.mock.method(Task.db, 'transaction', async (work) => work({}));
   const doc = taskDocument();
   let saved = false;
   let goalQuery;
   doc.save = async () => { saved = true; };
   t.mock.method(Task, 'findOne', async () => doc);
-  t.mock.method(Goal, 'exists', async (query) => { goalQuery = query; return null; });
+  t.mock.method(Goal, 'updateOne', async (query) => {
+    goalQuery = query;
+    return { matchedCount: 0 };
+  });
 
   await assert.rejects(taskService.updateTask(USER_ID, TASK_ID, {
     title: 'Task', description: null, status: 'todo', dueDate: null,
@@ -431,7 +427,7 @@ test('updating to done sets completedAt, remaining done preserves it, and leavin
 });
 
 test('changing a linked Task status or Goal recalculates each affected Goal once', async (t) => {
-  const session = mockTaskTransaction(t);
+  t.mock.method(Task.db, 'transaction', async (work) => work({}));
   const oldGoalId = '64f000000000000000000031';
   const newGoalId = '64f000000000000000000032';
   const doc = taskDocument({
@@ -439,20 +435,9 @@ test('changing a linked Task status or Goal recalculates each affected Goal once
     goalId: new mongoose.Types.ObjectId(oldGoalId),
   });
   const recalculated = [];
-  t.mock.method(Task, 'findOne', async (filter, projection, options) => {
-    assert.equal(options.session, session);
-    return doc;
-  });
-  doc.save = async (options) => { assert.equal(options.session, session); };
-  t.mock.method(Goal, 'exists', async (filter, options) => {
-    assert.equal(options.session, session);
-    return { _id: newGoalId };
-  });
-  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, goalSession) => {
-    assert.equal(goalSession, session);
-    assert.equal(userId, USER_ID);
-    recalculated.push(goalId);
-  });
+  t.mock.method(Task, 'findOne', async () => doc);
+  t.mock.method(Goal, 'updateOne', async () => ({ matchedCount: 1 }));
+  t.mock.method(goalService, 'recalculateProgress', async (goalId) => { recalculated.push(goalId); });
 
   await taskService.updateTask(USER_ID, TASK_ID, {
     title: 'Task', description: null, status: 'done', dueDate: null,
@@ -493,9 +478,9 @@ test('failure updating the destination Goal rejects the whole Task update transa
     assert.equal(options.session, session);
     return doc;
   });
-  t.mock.method(Goal, 'exists', async (filter, options) => {
+  t.mock.method(Goal, 'updateOne', async (filter, update, options) => {
     assert.equal(options.session, session);
-    return { _id: newGoalId };
+    return { matchedCount: 1 };
   });
   doc.save = async (options) => {
     assert.equal(options.session, session);
@@ -516,6 +501,35 @@ test('failure updating the destination Goal rejects the whole Task update transa
     (error) => error === failure,
   );
   assert.deepEqual(writes, ['task', oldGoalId, newGoalId]);
+});
+
+test('unlinking a Task keeps its save and the previous Goal update in one transaction', async (t) => {
+  const session = mockTaskTransaction(t);
+  const doc = taskDocument({ goalId: new mongoose.Types.ObjectId(GOAL_ID) });
+  const failure = new Error('Previous Goal update failed');
+  let taskSaved = false;
+  t.mock.method(Task, 'findOne', async (filter, projection, options) => {
+    assert.equal(options.session, session);
+    assert.equal(filter.userId.toString(), USER_ID);
+    return doc;
+  });
+  doc.save = async (options) => {
+    assert.equal(options.session, session);
+    assert.equal(doc.goalId, null);
+    taskSaved = true;
+  };
+  t.mock.method(goalService, 'recalculateProgress', async (goalId, userId, goalSession) => {
+    assert.equal(taskSaved, true);
+    assert.equal(goalSession, session);
+    assert.equal(goalId, GOAL_ID);
+    assert.equal(userId, USER_ID);
+    throw failure;
+  });
+
+  await assert.rejects(taskService.updateTask(USER_ID, TASK_ID, {
+    title: 'Unlinked', description: null, status: 'todo',
+    dueDate: null, goalId: null, priority: 'medium',
+  }), (error) => error === failure);
 });
 
 test('deleting a linked Task recalculates its Goal', async (t) => {

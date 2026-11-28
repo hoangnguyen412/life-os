@@ -37,15 +37,24 @@ async function calculateProgress(goal, userId, session) {
       goalId: goal._id,
       userId: new mongoose.Types.ObjectId(userId),
     };
-    // Transaction operations run sequentially on the same session.
-    const total = await Task.countDocuments(taskFilter, { session });
-    const completed = await Task.countDocuments({ ...taskFilter, status: 'done' }, { session });
-    goal.progress = total === 0 ? 0 : Math.round((completed / total) * 100);
-    // Rounding must not show full completion while unfinished Tasks remain.
-    if (completed < total) {
-      goal.progress = Math.min(goal.progress, 99);
-    }
-    goal.status = total > 0 && completed === total ? 'completed' : 'active';
+    const completedFilter = { ...taskFilter, status: 'done' };
+    // MongoDB does not support parallel operations in a transaction.
+    const [total, completed] = session
+      ? [
+        await Task.countDocuments(taskFilter, { session }),
+        await Task.countDocuments(completedFilter, { session }),
+      ]
+      : await Promise.all([
+        Task.countDocuments(taskFilter),
+        Task.countDocuments(completedFilter),
+      ]);
+    const allTasksCompleted = total > 0 && completed === total;
+    goal.progress = total === 0
+      ? 0
+      : allTasksCompleted
+        ? 100
+        : Math.min(Math.round((completed / total) * 100), 99);
+    goal.status = allTasksCompleted ? 'completed' : 'active';
   } else {
     goal.progress = goal.manualProgress;
     goal.status = goal.progress === 100 ? 'completed' : 'active';
@@ -55,18 +64,14 @@ async function calculateProgress(goal, userId, session) {
 }
 
 async function recalculateProgress(goalId, userId, session) {
-  const filter = {
+  const goal = await Goal.findOne({
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  };
-  // A real write makes concurrent Task/Goal transactions conflict and retry.
-  const goal = session
-    ? await Goal.findOneAndUpdate(filter, { $inc: { taskRevision: 1 } }, { session, new: true })
-    : await Goal.findOne(filter);
+  }, null, session ? { session } : undefined);
   if (!goal) return null;
 
   await calculateProgress(goal, userId, session);
-  await goal.save({ session });
+  await goal.save(session ? { session } : undefined);
   return goal;
 }
 
@@ -113,11 +118,11 @@ async function createGoal(userId, input) {
   return serializeGoal(currentGoal);
 }
 
-async function findOwnedGoal(userId, goalId) {
+async function findOwnedGoal(userId, goalId, session) {
   const goal = await Goal.findOne({
     _id: new mongoose.Types.ObjectId(goalId),
     userId: new mongoose.Types.ObjectId(userId),
-  });
+  }, null, session ? { session } : undefined);
   if (!goal) throw new AppError(404, 'NOT_FOUND', 'Goal not found');
   return goal;
 }
@@ -163,25 +168,15 @@ async function updateManualProgress(userId, goalId, manualProgress) {
 }
 
 async function deleteGoal(userId, goalId) {
-  return mongoose.connection.transaction(async (session) => {
-    const filter = {
-      _id: new mongoose.Types.ObjectId(goalId),
-      userId: new mongoose.Types.ObjectId(userId),
-    };
-    // Coordinate with linked Task transactions before clearing their Goal references.
-    const goal = await Goal.findOneAndUpdate(
-      filter,
-      { $inc: { taskRevision: 1 } },
-      { session, new: true },
-    );
-    if (!goal) throw new AppError(404, 'NOT_FOUND', 'Goal not found');
-
+  return Goal.db.transaction(async (session) => {
+    const goal = await findOwnedGoal(userId, goalId, session);
+    const ownerId = new mongoose.Types.ObjectId(userId);
     await Task.updateMany(
-      { goalId: goal._id, userId: new mongoose.Types.ObjectId(userId) },
+      { goalId: goal._id, userId: ownerId },
       { $set: { goalId: null } },
       { session },
     );
-    const deletion = await Goal.deleteOne(filter, { session });
+    const deletion = await Goal.deleteOne({ _id: goal._id, userId: ownerId }, { session });
     if (deletion.deletedCount === 0) {
       throw new AppError(404, 'NOT_FOUND', 'Goal not found');
     }

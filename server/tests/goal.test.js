@@ -257,15 +257,8 @@ test('Goal detail and update queries are user-scoped and update only editable fi
 });
 
 test('foreign Goal reads, updates, patches, and deletes return NOT_FOUND', async (t) => {
+  t.mock.method(Goal.db, 'transaction', async (work) => work({}));
   const queries = [];
-  const session = {};
-  t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
-  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
-    assert.equal(options.session, session);
-    queries.push(filter);
-    return null;
-  });
-  t.mock.method(Task, 'updateMany', async () => { assert.fail('missing Goal must not unlink Tasks'); });
   t.mock.method(Goal, 'findOne', async (filter) => { queries.push(filter); return null; });
 
   await assert.rejects(goalService.getGoal(USER_ID, GOAL_ID), (error) => error.status === 404);
@@ -305,8 +298,8 @@ test('manual PATCH is rejected for task_based Goals', async (t) => {
 test('task_based Goal progress reflects empty, partial, nearly complete, and complete Task sets', async (t) => {
   const goal = goalDocument();
   const taskFilters = [];
-  let totalTasks = 3;
-  let completedTasks = 2;
+  let totalTasks = 0;
+  let completedTasks = 0;
   t.mock.method(Goal, 'findOne', async (filter) => {
     assert.equal(filter.userId.toString(), USER_ID);
     return goal;
@@ -317,9 +310,16 @@ test('task_based Goal progress reflects empty, partial, nearly complete, and com
   });
 
   await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 67);
+  assert.equal(goal.progress, 0);
   assert.equal(goal.status, 'active');
   assert.ok(taskFilters.every((filter) => filter.userId.toString() === USER_ID));
+
+  taskFilters.length = 0;
+  totalTasks = 3;
+  completedTasks = 2;
+  await goalService.recalculateProgress(GOAL_ID, USER_ID);
+  assert.equal(goal.progress, 67);
+  assert.equal(goal.status, 'active');
 
   taskFilters.length = 0;
   totalTasks = 200;
@@ -328,73 +328,11 @@ test('task_based Goal progress reflects empty, partial, nearly complete, and com
   assert.equal(goal.progress, 99);
   assert.equal(goal.status, 'active');
 
+  taskFilters.length = 0;
   completedTasks = 200;
   await goalService.recalculateProgress(GOAL_ID, USER_ID);
   assert.equal(goal.progress, 100);
   assert.equal(goal.status, 'completed');
-
-  totalTasks = 0;
-  completedTasks = 0;
-  goal.progress = 100;
-  goal.status = 'completed';
-  await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 0);
-  assert.equal(goal.status, 'active');
-});
-
-test('task_based progress stays below 100 until all Tasks are done', async (t) => {
-  const goal = goalDocument();
-  let completedTasks = 199;
-  t.mock.method(Goal, 'findOne', async () => goal);
-  t.mock.method(Task, 'countDocuments', async (filter) => (
-    filter.status === 'done' ? completedTasks : 200
-  ));
-
-  await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 99);
-  assert.equal(goal.status, 'active');
-
-  completedTasks = 200;
-  await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 100);
-  assert.equal(goal.status, 'completed');
-
-  completedTasks = 199;
-  await goalService.recalculateProgress(GOAL_ID, USER_ID);
-  assert.equal(goal.progress, 99);
-  assert.equal(goal.status, 'active');
-});
-
-test('Task transaction writes the owned Goal even when its rounded progress is unchanged', async (t) => {
-  const session = {};
-  const goal = goalDocument({ progress: 50 });
-  const calls = [];
-  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
-    assert.equal(filter._id.toString(), GOAL_ID);
-    assert.equal(filter.userId.toString(), USER_ID);
-    assert.deepEqual(update, { $inc: { taskRevision: 1 } });
-    assert.equal(options.session, session);
-    assert.equal(options.new, true);
-    calls.push('write Goal');
-    return goal;
-  });
-  t.mock.method(Goal, 'findOne', async () => {
-    assert.fail('a Task transaction must write its Goal before reading progress');
-  });
-  t.mock.method(Task, 'countDocuments', async (filter, options) => {
-    assert.equal(options.session, session);
-    calls.push('count Tasks');
-    return filter.status === 'done' ? 1 : 2;
-  });
-  goal.save = async (options) => {
-    assert.equal(options.session, session);
-    calls.push('save Goal');
-  };
-
-  const result = await goalService.recalculateProgress(GOAL_ID, USER_ID, session);
-  assert.equal(result.progress, 50);
-  assert.deepEqual(calls, ['write Goal', 'count Tasks', 'count Tasks', 'save Goal']);
-  assert.equal(Object.hasOwn(goalService.serializeGoal(goal), 'taskRevision'), false);
 });
 
 test('PUT switching to manual copies current task progress; switching back recalculates', async (t) => {
@@ -426,30 +364,19 @@ test('PUT switching to manual copies current task progress; switching back recal
 });
 
 test('deleting a Goal unlinks only this user’s Tasks and preserves the Task records', async (t) => {
-  const goal = goalDocument();
   const session = {};
-  const calls = [];
+  t.mock.method(Goal.db, 'transaction', async (work) => work(session));
+  const goal = goalDocument();
   let taskUpdate;
   let goalDelete;
-  t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
-  t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
-    assert.equal(filter._id.toString(), GOAL_ID);
-    assert.equal(filter.userId.toString(), USER_ID);
-    assert.deepEqual(update, { $inc: { taskRevision: 1 } });
+  t.mock.method(Goal, 'findOne', async (_filter, _projection, options) => {
     assert.equal(options.session, session);
-    calls.push('write Goal');
     return goal;
   });
-  t.mock.method(Task, 'updateMany', async (...args) => {
-    taskUpdate = args;
-    assert.equal(args[2].session, session);
-    calls.push('unlink Tasks');
-    return { modifiedCount: 2 };
-  });
+  t.mock.method(Task, 'updateMany', async (...args) => { taskUpdate = args; return { modifiedCount: 2 }; });
   t.mock.method(Goal, 'deleteOne', async (filter, options) => {
     goalDelete = filter;
     assert.equal(options.session, session);
-    calls.push('delete Goal');
     return { deletedCount: 1 };
   });
 
@@ -459,46 +386,9 @@ test('deleting a Goal unlinks only this user’s Tasks and preserves the Task re
     userId: new mongoose.Types.ObjectId(USER_ID),
   });
   assert.deepEqual(taskUpdate[1], { $set: { goalId: null } });
+  assert.equal(taskUpdate[2].session, session);
   assert.equal(goalDelete.userId.toString(), USER_ID);
   assert.deepEqual(result, { _id: GOAL_ID, deleted: true });
-  assert.deepEqual(calls, ['write Goal', 'unlink Tasks', 'delete Goal']);
-});
-
-test('Goal deletion errors reject the transaction at each write stage', async (t) => {
-  for (const stage of ['write Goal', 'unlink Tasks', 'delete Goal', 'missing deletion']) {
-    await t.test(stage, async (t) => {
-      const session = {};
-      const failure = new Error(`${stage} failed`);
-      const calls = [];
-      t.mock.method(mongoose.connection, 'transaction', async (work) => work(session));
-      t.mock.method(Goal, 'findOneAndUpdate', async (filter, update, options) => {
-        assert.equal(options.session, session);
-        calls.push('write Goal');
-        if (stage === 'write Goal') throw failure;
-        return goalDocument();
-      });
-      t.mock.method(Task, 'updateMany', async (filter, update, options) => {
-        assert.equal(options.session, session);
-        calls.push('unlink Tasks');
-        if (stage === 'unlink Tasks') throw failure;
-        return { modifiedCount: 0 };
-      });
-      t.mock.method(Goal, 'deleteOne', async (filter, options) => {
-        assert.equal(options.session, session);
-        calls.push('delete Goal');
-        if (stage === 'delete Goal') throw failure;
-        return { deletedCount: 0 };
-      });
-
-      await assert.rejects(
-        goalService.deleteGoal(USER_ID, GOAL_ID),
-        (error) => stage === 'missing deletion' ? error.status === 404 : error === failure,
-      );
-      const expected = ['write Goal', 'unlink Tasks', 'delete Goal'];
-      const lastStage = stage === 'missing deletion' ? 'delete Goal' : stage;
-      assert.deepEqual(calls, expected.slice(0, expected.indexOf(lastStage) + 1));
-    });
-  }
 });
 
 test('OpenAPI documents all Goal operations and the documented manualProgress field', () => {

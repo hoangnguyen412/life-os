@@ -40,10 +40,8 @@ const goalSchema = new mongoose.Schema({
     enum: ['active', 'completed'],
     default: 'active',
   },
-  // Force a Goal write when linked Tasks change, even if rounded progress stays the same.
-  taskRevision: {
+  taskLinkRevision: {
     type: Number,
-    default: 0,
     select: false,
   },
 }, {
