@@ -28,6 +28,12 @@ function buildTaskFilter(userId, query, now = new Date()) {
   const filter = { userId: new mongoose.Types.ObjectId(userId) };
   const conditions = [];
 
+  if (query.dueFrom && query.dueTo) {
+    conditions.push({
+      dueDate: { $gte: new Date(query.dueFrom), $lt: new Date(query.dueTo) },
+    });
+  }
+
   if (query.status) {
     conditions.push({ status: query.status });
   }
@@ -230,9 +236,6 @@ async function getTask(userId, taskId) {
 }
 
 async function updateTask(userId, taskId, input) {
-  if (input.goalId == null) {
-    return saveTaskUpdate(userId, taskId, input);
-  }
   return Task.db.transaction((session) => saveTaskUpdate(userId, taskId, input, session));
 }
 
@@ -289,23 +292,25 @@ async function saveTaskUpdate(userId, taskId, input, session) {
 }
 
 async function deleteTask(userId, taskId) {
-  const task = await Task.findOneAndDelete({
-    _id: new mongoose.Types.ObjectId(taskId),
-    userId: new mongoose.Types.ObjectId(userId),
+  return mongoose.connection.transaction(async (session) => {
+    const task = await Task.findOneAndDelete({
+      _id: new mongoose.Types.ObjectId(taskId),
+      userId: new mongoose.Types.ObjectId(userId),
+    }, { session });
+
+    if (!task) {
+      throw new AppError(404, 'NOT_FOUND', 'Task not found');
+    }
+
+    if (task.goalId) {
+      await goalService.recalculateProgress(task.goalId.toString(), userId, session);
+    }
+
+    return {
+      _id: task._id.toString(),
+      deleted: true,
+    };
   });
-
-  if (!task) {
-    throw new AppError(404, 'NOT_FOUND', 'Task not found');
-  }
-
-  if (task.goalId) {
-    await goalService.recalculateProgress(task.goalId.toString(), userId);
-  }
-
-  return {
-    _id: task._id.toString(),
-    deleted: true,
-  };
 }
 
 module.exports = {

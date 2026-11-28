@@ -9,12 +9,13 @@ export const API_URL = (import.meta.env?.VITE_API_URL || 'http://localhost:5000/
 
 // Forms can map field to an input; code/status also support general error handling.
 export class ApiError extends Error {
-  constructor(message, { status = 0, code = 'NETWORK_ERROR', field, cause } = {}) {
+  constructor(message, { status = 0, code = 'NETWORK_ERROR', field, retryAfter, cause } = {}) {
     super(message, { cause })
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.field = field
+    this.retryAfter = retryAfter
   }
 }
 
@@ -66,10 +67,21 @@ export async function apiRequest(path, { method = 'GET', body, query = {}, auth 
 
   if (!response.ok || result?.success === false) {
     if (auth && response.status !== 401 && result?.error?.code === 'UNAUTHORIZED') expireSession(requestToken)
-    throw new ApiError(result?.error?.message || 'The request failed. Please try again.', {
+    let message = result?.error?.message || 'The request failed. Please try again.'
+    let retryAfter
+    if (response.status === 429) {
+      const seconds = result?.error?.retryAfter
+      // Read the JSON value so this also works across origins without exposed headers.
+      if (Number.isFinite(seconds) && seconds > 0) retryAfter = Math.ceil(seconds)
+      message = retryAfter
+        ? `Too many attempts. Please try again in ${retryAfter} seconds.`
+        : 'Too many attempts. Please try again later.'
+    }
+    throw new ApiError(message, {
       status: response.status,
       code: result?.error?.code || 'HTTP_ERROR',
       field: result?.error?.field,
+      retryAfter,
     })
   }
   if (result?.success !== true || !Object.hasOwn(result, 'data')) {

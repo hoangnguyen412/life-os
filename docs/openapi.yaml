@@ -21,6 +21,7 @@ paths:
     post:
       tags: [Authentication]
       summary: Register a new user
+      description: Limited to 10 requests per client IP per 15 minutes.
       security: []
       requestBody:
         required: true
@@ -43,12 +44,15 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '409':
           $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
         '500':
           $ref: '#/components/responses/ServerError'
   /auth/login:
     post:
       tags: [Authentication]
       summary: Log in and receive a JWT
+      description: Limited to 20 unsuccessful requests per client IP per 15 minutes.
       security: []
       requestBody:
         required: true
@@ -70,6 +74,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
         '500':
           $ref: '#/components/responses/ServerError'
   /auth/me:
@@ -107,6 +113,18 @@ paths:
               - $ref: '#/components/schemas/ObjectId'
               - type: string
                 enum: [none]
+        - name: dueFrom
+          in: query
+          description: Inclusive UTC deadline bound. Send together with dueTo, with dueFrom earlier than dueTo. Tasks without a due date are excluded when the range is supplied.
+          schema:
+            type: string
+            format: date-time
+        - name: dueTo
+          in: query
+          description: Exclusive UTC deadline bound. Send together with dueFrom. Omit both bounds to keep the full Task list, including tasks without a due date.
+          schema:
+            type: string
+            format: date-time
         - name: overdue
           in: query
           description: Filter according to dueDate < now and status != done. Tasks without dueDate are not overdue.
@@ -580,6 +598,24 @@ components:
         maximum: 100
         default: 20
   responses:
+    RateLimitError:
+      description: Authentication rate limit exceeded
+      headers:
+        Retry-After:
+          description: Seconds until the client can retry
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: RATE_LIMITED
+              message: Too many attempts. Please try again later.
+              retryAfter: 900
     ValidationError:
       description: Request validation failed
       content:
@@ -1050,12 +1086,16 @@ components:
           properties:
             code:
               type: string
-              enum: [VALIDATION_ERROR, UNAUTHORIZED, NOT_FOUND, CONFLICT, SERVER_ERROR]
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, NOT_FOUND, CONFLICT, RATE_LIMITED, SERVER_ERROR]
             message:
               type: string
             field:
               type: string
               description: Request body field or query parameter associated with the error, when applicable.
+            retryAfter:
+              type: integer
+              minimum: 1
+              description: Seconds until retry, present for RATE_LIMITED errors.
     ObjectId:
       type: string
       pattern: '^[0-9a-fA-F]{24}$'

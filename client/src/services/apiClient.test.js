@@ -7,6 +7,7 @@ import * as authApi from './authApi.js'
 import * as taskApi from './taskApi.js'
 import * as goalApi from './goalApi.js'
 import { getDashboardSummary } from './dashboardApi.js'
+import { listCalendarTasks } from './calendarApi.js'
 import { authRedirect } from '../utils/authRedirect.js'
 import validateAuth from '../utils/validateAuth.js'
 
@@ -42,6 +43,44 @@ afterEach(() => {
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else delete globalThis.window
 })
+
+test('Calendar task requests keep the displayed month range on every page', async (t) => {
+  const range = { from: '2026-10-31T17:00:00.000Z', to: '2026-11-30T17:00:00.000Z' }
+  const signal = new AbortController().signal
+  setToken('calendar-session')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    const params = new URL(url).searchParams
+    const page = Number(params.get('page'))
+    assert.equal(params.get('dueFrom'), range.from)
+    assert.equal(params.get('dueTo'), range.to)
+    assert.equal(params.get('limit'), '100')
+    assert.equal(options.signal, signal)
+    assert.equal(options.headers.Authorization, 'Bearer calendar-session')
+    return Response.json({ success: true, data: [{ _id: `task-${page}` }], pagination: { page, totalPages: 2 } })
+  })
+
+  assert.deepEqual(await listCalendarTasks(signal, range), [{ _id: 'task-1' }, { _id: 'task-2' }])
+  assert.equal(calls.length, 2)
+});
+
+test('full Calendar export loads all Task pages without the displayed month range', async (t) => {
+  const tasks = [
+    { _id: 'november', dueDate: '2026-11-23T16:59:59.999Z' },
+    { _id: 'december', dueDate: '2026-12-25T16:59:59.999Z' },
+  ]
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    const params = new URL(url).searchParams
+    assert.equal(params.has('dueFrom'), false)
+    assert.equal(params.has('dueTo'), false)
+    const page = Number(params.get('page'))
+    return Response.json({ success: true, data: [tasks[page - 1]], pagination: { page, totalPages: 2 } })
+  })
+
+  assert.deepEqual(await listCalendarTasks(), tasks)
+  assert.equal(calls.length, 2)
+});
 
 test('list requests retain pagination, encode filters, and send the current JWT', async (t) => {
   const envelope = { success: true, data: [], pagination: { page: 2, limit: 8, total: 0, totalPages: 0 } }
@@ -168,6 +207,44 @@ test('protected 401 clears the expired session and redirects; bad login stays in
   await assert.rejects(authApi.login({ email: 'user@example.com', password: 'wrong' }), { status: 401 })
   assert.equal(getToken(), 'existing-token')
   assert.deepEqual(redirects, [])
+})
+
+test('rate-limited login and registration show the wait time without changing the session or retrying', async (t) => {
+  setToken('existing-token')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, ...options })
+    return Response.json({ success: false, error: {
+      code: 'RATE_LIMITED', message: 'Too many attempts. Please try again later.', retryAfter: 120,
+    } }, { status: 429 })
+  })
+
+  for (const authenticate of [authApi.login, authApi.register]) {
+    await assert.rejects(authenticate({ name: 'User', email: 'user@example.com', password: 'password' }), (error) => {
+      assert.ok(error instanceof ApiError)
+      assert.equal(error.status, 429)
+      assert.equal(error.code, 'RATE_LIMITED')
+      assert.equal(error.retryAfter, 120)
+      assert.equal(error.message, 'Too many attempts. Please try again in 120 seconds.')
+      return true
+    })
+  }
+  assert.equal(getToken(), 'existing-token')
+  assert.deepEqual(redirects, [])
+  assert.equal(calls.length, 2)
+})
+
+test('rate limits without a valid wait time still show a useful message', async (t) => {
+  for (const retryAfter of [undefined, null, 0, -1, 'invalid']) {
+    t.mock.method(globalThis, 'fetch', async () => Response.json({
+      success: false, error: { code: 'RATE_LIMITED', retryAfter },
+    }, { status: 429 }))
+    await assert.rejects(authApi.login({ email: 'user@example.com', password: 'password' }), (error) => {
+      assert.equal(error.status, 429)
+      assert.equal(error.retryAfter, undefined)
+      assert.equal(error.message, 'Too many attempts. Please try again later.')
+      return true
+    })
+  }
 })
 
 test('a delayed unauthorized response does not clear a newer login', async (t) => {

@@ -43,5 +43,6 @@ const taskSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 taskSchema.index({ userId: 1, createdAt: -1, _id: -1 });
+taskSchema.index({ userId: 1, dueDate: 1 });
 
 module.exports = mongoose.model('Task', taskSchema);

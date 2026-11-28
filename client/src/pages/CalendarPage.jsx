@@ -5,7 +5,6 @@
  */
 import { useEffect, useState } from 'react'
 import { listCalendarEvents, listCalendarTasks } from '../services/calendarApi.js'
-import { listAllGoals } from '../services/goalApi.js'
 import { dateOnly, formatDate, formatTime, monthCells, shiftMonth, timeToISO } from '../utils/dates.js'
 import { calendarItems, eventTimeLabel, itemsInMonth, occursOn } from '../utils/calendar.js'
 import { downloadCalendarICS } from '../utils/icalendar.js'
@@ -27,7 +26,7 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(today.slice(0, 7))
   const [dialog, setDialog] = useState(null)
   const [revision, setRevision] = useState(0)
-  const [data, setData] = useState({ key: '', items: [], goals: [], error: '' })
+  const [data, setData] = useState({ key: '', items: [], error: '' })
   const [exportNotice, setExportNotice] = useState(null)
   const [exporting, setExporting] = useState(false)
   const requestKey = `${month}/${revision}`
@@ -45,16 +44,15 @@ export default function CalendarPage() {
 
     async function load() {
       try {
-        const [tasks, events, goals] = await Promise.all([
-          listCalendarTasks(signal),
+        const [tasks, events] = await Promise.all([
+          listCalendarTasks(signal, range),
           listCalendarEvents(range, signal),
-          listAllGoals({ signal }),
         ])
         if (!signal.aborted) {
-          setData({ key: requestKey, items: itemsInMonth(calendarItems(tasks, events), month), goals, error: '' })
+          setData({ key: requestKey, items: itemsInMonth(calendarItems(tasks, events), month), error: '' })
         }
       } catch (failure) {
-        if (!signal.aborted) setData({ key: requestKey, items: [], goals: [], error: failure.message })
+        if (!signal.aborted) setData({ key: requestKey, items: [], error: failure.message })
       }
     }
 
@@ -155,6 +153,6 @@ export default function CalendarPage() {
         })}</div> : <EmptyState icon="calendar" title="No schedule this month" description="Add an event or give a task a deadline to see it here."><button className="os-button" onClick={() => add(`${month}-01`)}>+ Add event</button></EmptyState>}
       </section>}
     {dialog?.kind === 'event' && <EventDialog dialog={dialog} onClose={() => setDialog(null)} onSaved={reload} />}
-    {dialog?.kind === 'task' && <TaskDialog dialog={dialog} goals={data.goals} onClose={() => setDialog(null)} onSaved={reload} />}
+    {dialog?.kind === 'task' && <TaskDialog dialog={dialog} onClose={() => setDialog(null)} onSaved={reload} />}
   </>
 }

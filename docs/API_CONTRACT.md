@@ -68,7 +68,14 @@ The HTTP status and envelope must agree. `field`, when present, uses the exact A
 | 401 | `UNAUTHORIZED` | Missing/invalid/expired JWT or invalid login credentials |
 | 404 | `NOT_FOUND` | Resource does not exist or belongs to another user |
 | 409 | `CONFLICT` | Duplicate email during registration |
+| 429 | `RATE_LIMITED` | Too many authentication attempts; `error.retryAfter` and the `Retry-After` header contain seconds until retry |
 | 500 | `SERVER_ERROR` | Unexpected server error; do not expose internal details |
+
+### Authentication rate limits
+
+Authentication limits are separate per client IP: 20 unsuccessful login requests and 10 registration requests per 15 minutes. Successful login requests do not count toward the login limit. The counters are stored in memory, reset when the server restarts, and are not shared across instances. A deployment with multiple instances needs a shared rate-limit store.
+
+For a deployment behind one trusted proxy hop (such as the intended Render setup), set `TRUST_PROXY=1` in the backend environment so Express uses the forwarded client IP. Keep `TRUST_PROXY=0` locally. Verify the deployment's proxy path before enabling this setting; a different number of proxy hops needs a matching trust configuration.
 
 ## 3. Date and optional-field rules
 
@@ -183,9 +190,16 @@ Register and login return the same token/user shape. `user` contains `_id`, `nam
 | `status` | `todo`, `in_progress`, `done` | No status filter when omitted |
 | `goalId` | ObjectId string or `none` | `none` means Tasks with no Goal |
 | `overdue` | `true`, `false` | No overdue filter when omitted |
+| `dueFrom`, `dueTo` | ISO UTC date-time strings, supplied together with `dueFrom < dueTo` | No deadline range filter when omitted |
 | `sort` | `dueDate_asc`, `priority_desc`, `createdAt_desc` | `dueDate_asc` |
 | `page` | Integer ≥ 1 | `1` |
 | `limit` | Integer 1–100 | `20` |
+
+The deadline range selects Tasks with `dueDate >= dueFrom AND dueDate < dueTo`.
+Tasks without a due date are excluded when a range is supplied. The range combines
+with the existing status, Goal and overdue filters. Missing one bound, invalid UTC
+timestamps, or equal/reversed bounds return `400 VALIDATION_ERROR`. Omit both bounds
+to retain the existing list behavior, including full-calendar ICS export.
 
 Sort rules:
 

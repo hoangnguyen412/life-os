@@ -13,8 +13,8 @@ function taskBody(task) {
   }
 }
 
-export function listTasks({ status, goalId, overdue, sort, page, limit } = {}, options) {
-  return apiRequest('/tasks', { query: { status, goalId, overdue, sort, page, limit }, signal: options?.signal })
+export function listTasks({ status, goalId, overdue, dueFrom, dueTo, sort, page, limit } = {}, options) {
+  return apiRequest('/tasks', { query: { status, goalId, overdue, dueFrom, dueTo, sort, page, limit }, signal: options?.signal })
 }
 export const getTask = (id, options) => apiRequest(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal })
 export const createTask = (task, options) => apiRequest('/tasks', { method: 'POST', body: taskBody(task), signal: options?.signal })
